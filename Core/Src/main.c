@@ -52,27 +52,31 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
-/*==================== PROJECT CONFIGURATION ====================*/
+/* Project configuration */
 #include "configuration.h"
 
-/*==================== STANDARD LIBRARIES ====================*/
+/* Standard library includes */
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
 
-/*==================== SENSOR LIBRARIES ====================*/
+/* Sensor drivers */
 #include "bme280.h"          // Environmental sensor (temp, humidity, pressure)
 #include "bmi088.h"          // 6-axis IMU (accelerometer + gyroscope)
 #include "l86_gnss.h"        // GPS/GNSS module
 
-/*==================== COMMUNICATION LIBRARIES ====================*/
+/* Communication modules */
 #include "lora.h"            // LoRa wireless communication
+#include "packet.h"          // Telemetry packet handling
 
-/*==================== ALGORITHM LIBRARIES ====================*/
-#include "queternion.h"      // Quaternion mathematics
-#include "sensor_fusion.h"   // Sensor fusion algorithms
 
-/*==================== MATHEMATICAL CONSTANTS ====================*/
+/* Algorithm and processing modules */
+#include "queternion.h"         // Quaternion mathematics
+#include "sensor_fusion.h"      // Sensor fusion algorithms
+#include "flight_algorithm.h"   // Flight state detection and control
+
+
+/*MATHEMATICAL CONSTANTS*/
 #ifndef M_PI
 #define M_PI 3.14159265358979323846f
 #endif
@@ -103,6 +107,7 @@ I2C_HandleTypeDef hi2c3;
 
 TIM_HandleTypeDef htim2;
 
+UART_HandleTypeDef huart4;
 UART_HandleTypeDef huart2;
 UART_HandleTypeDef huart6;
 DMA_HandleTypeDef hdma_usart6_rx;
@@ -130,6 +135,8 @@ static lorastruct e22_lora;
 // UART communication buffers
 uint8_t usart1_rx_buffer[36];
 static char uart_buffer[128];
+extern unsigned char normal_paket[51];  // Normal mode telemetry packet
+
 
 /*==================== TIMING AND STATUS FLAGS ====================*/
 // Timer flags for periodic operations
@@ -181,6 +188,7 @@ static void MX_TIM2_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_USART6_UART_Init(void);
+static void MX_UART4_Init(void);
 /* USER CODE BEGIN PFP */
 static void bme280_begin();
 uint8_t bmi_imu_init(void);
@@ -233,6 +241,7 @@ int main(void)
   MX_USART2_UART_Init();
   MX_ADC1_Init();
   MX_USART6_UART_Init();
+  MX_UART4_Init();
   /* USER CODE BEGIN 2 */
 
 	/*==================== TIMER AND INTERRUPT CONFIGURATION ====================*/
@@ -278,10 +287,9 @@ int main(void)
 	lora_activate();
 
 	/* ==== GPS/GNSS INITIALIZATION ==== */
-	// Initialize UART5 and DMA for GPS communication
+	// Initialize L86 GPS/GNSS module
 	L86_GPIO_Init();
-	HAL_Delay(50);
-	HAL_DMA_Init(&hdma_usart6_rx);
+	HAL_Delay(100);  // GPS modülün boot olması için daha fazla bekle
 	L86_GNSS_Init(&huart6, BAUD_RATE_9600);
 
   /* USER CODE END 2 */
@@ -306,14 +314,17 @@ int main(void)
 		  tx_timer_flag_100ms = 0;
 
 		  // Read magnetometer ADC values
-		  //read_ADC();
-
-		  // Update sensor readings and transmit data
-		  //read_value();
+		  read_ADC();
 
 		  // Update GPS/GNSS data
 		  L86_GNSS_Update(&gnss_data);
-		  L86_GNSS_Print_Info(&gnss_data,&huart2);
+		  //L86_GNSS_Print_Info(&gnss_data,&huart2);
+
+		  // Package all sensor data into telemetry packet for ground station transmission
+		  addDataPacketNormal(&BME280_sensor, &BMI_sensor, &gnss_data, hmc1021_gauss);
+
+		  // Update sensor readings and transmit data
+		  //read_value();
 		}
 
 		/*PERIODIC OPERATIONS (1 SECOND)*/
@@ -542,6 +553,39 @@ static void MX_TIM2_Init(void)
 }
 
 /**
+  * @brief UART4 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_UART4_Init(void)
+{
+
+  /* USER CODE BEGIN UART4_Init 0 */
+
+  /* USER CODE END UART4_Init 0 */
+
+  /* USER CODE BEGIN UART4_Init 1 */
+
+  /* USER CODE END UART4_Init 1 */
+  huart4.Instance = UART4;
+  huart4.Init.BaudRate = 9600;
+  huart4.Init.WordLength = UART_WORDLENGTH_8B;
+  huart4.Init.StopBits = UART_STOPBITS_1;
+  huart4.Init.Parity = UART_PARITY_NONE;
+  huart4.Init.Mode = UART_MODE_TX_RX;
+  huart4.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart4.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN UART4_Init 2 */
+
+  /* USER CODE END UART4_Init 2 */
+
+}
+
+/**
   * @brief USART2 Initialization Function
   * @param None
   * @retval None
@@ -736,7 +780,7 @@ void loraBegin()
   HAL_Delay(100);
 
   // Configure LoRa parameters
-  e22_lora.baudRate = LORA_BAUD_115200;
+  e22_lora.baudRate = LORA_BAUD_9600;
   e22_lora.airRate = LORA_AIR_RATE_2_4k;
   e22_lora.packetSize = LORA_SUB_PACKET_64_BYTES;
   e22_lora.power = LORA_POWER_37dbm;

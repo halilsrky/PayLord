@@ -33,7 +33,8 @@ Core/Src/packet.o: ../Core/Src/packet.c ../Core/Inc/packet.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
- ../Core/Inc/configuration.h ../Core/Inc/bme280.h
+ ../Core/Inc/configuration.h ../Core/Inc/bme280.h ../Core/Inc/l86_gnss.h \
+ ../Core/Inc/flight_algorithm.h ../Core/Inc/sensor_fusion.h
 ../Core/Inc/packet.h:
 ../Core/Inc/bmi088.h:
 ../Core/Inc/main.h:
@@ -72,3 +73,6 @@ Core/Src/packet.o: ../Core/Src/packet.c ../Core/Inc/packet.h \
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h:
 ../Core/Inc/configuration.h:
 ../Core/Inc/bme280.h:
+../Core/Inc/l86_gnss.h:
+../Core/Inc/flight_algorithm.h:
+../Core/Inc/sensor_fusion.h:

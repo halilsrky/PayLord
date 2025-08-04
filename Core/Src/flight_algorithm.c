@@ -7,7 +7,7 @@
 
 #include "flight_algorithm.h"
 #include "queternion.h"
-#include "bme280.h"  // This will include main.h which has HAL definitions
+#include "bme280.h"
 #include "main.h"
 #include <math.h>
 
@@ -32,8 +32,11 @@ static uint8_t is_stabilized = 1;
 static uint8_t is_armed = 0;
 static uint8_t deployed_angle = 1;
 static uint8_t deployed_velocity = 1;
+static uint8_t deployed_magnetic = 1;
 static uint8_t drogue_deployed = 0;
 static uint8_t main_deployed = 0;
+static uint8_t durum_verisi = 1;
+
 int apogee_counter = 0;
 float prev_velocity = 0;
 
@@ -46,8 +49,7 @@ static uint16_t status_bits = 0;
 
 // Private function prototypes
 static float calculate_total_acceleration(bmi088_struct_t* bmi);
-void deploy_drogue_parachute(void);
-void deploy_main_parachute(void);
+
 // Drogue parachute deployment state
 static uint8_t drogue_pulse_active = 0;
 static uint32_t drogue_pulse_start_time = 0;
@@ -87,6 +89,8 @@ void flight_algorithm_reset(void)
     deployed_angle = 1;
     apogee_counter = 0;
     prev_velocity = 0;
+    deployed_magnetic = 1;
+    durum_verisi = 1;
 }
 
 /**
@@ -109,7 +113,7 @@ void flight_algorithm_update(BME_280_t* bme, bmi088_struct_t* bmi, sensor_fusion
                 current_phase = PHASE_BOOST;
                 is_rising = 1;
                 flight_start_time = HAL_GetTick();
-                status_bits |= 0x0001; // Set Bit 0: Rocket launch detected
+                durum_verisi = 2;
             }
             break;
 
@@ -118,7 +122,7 @@ void flight_algorithm_update(BME_280_t* bme, bmi088_struct_t* bmi, sensor_fusion
             if (HAL_GetTick() - flight_start_time > 7000) {
                 current_phase = PHASE_COAST;
                 is_stabilized = 1;
-                status_bits |= 0x0002; // Set Bit 1: Motor burn prevention period ended
+                durum_verisi = 3;
             }
             break;
 
@@ -126,34 +130,29 @@ void flight_algorithm_update(BME_280_t* bme, bmi088_struct_t* bmi, sensor_fusion
             // Check minimum arming altitude
             if (bme->altitude > min_arming_altitude) {
                 is_armed = 1;
-                status_bits |= 0x0004; // Set Bit 2: Minimum altitude threshold exceeded
+                durum_verisi = 4;
             }
 
             // Check if angle exceeds threshold
             if (is_armed && (fabs(bmi->datas.angle_y) > max_angle_threshold) && deployed_angle) {
                 drogue_deployed = 1;
                 deployed_angle = 0;
-                status_bits |= 0x0008; // Set Bit 3: Rocket body angle exceeds threshold
-                deploy_drogue_parachute();
+                durum_verisi = 5;
             }
 
-            /*     // Detect altitude decrease (apogee)
-            if (is_armed && sensor_fusion->apogeeDetect == 1 && deployed_velocity) {
-                status_bits |= 0x0010; // Set Bit 4: Rocket altitude started decreasing
-                status_bits |= 0x0020; // Set Bit 5: Drag parachute deployment command generated
+                 // Detect magnetic field decrease (apogee)
+            if (is_armed && sensor_fusion->apogeeDetect == 1 && deployed_magnetic) {
                 drogue_deployed = 1;
-                deployed_velocity = 0;
-                // deploy_drogue_parachute(); // Actual deployment command
-            }*/
+                deployed_magnetic = 0;
+                durum_verisi = 6;
+            }
 
             if (is_armed && sensor_fusion->velocity < 0.0f && sensor_fusion->velocity < prev_velocity && deployed_velocity) {
                 apogee_counter++;
                 if (apogee_counter >= 10) {  // Confirm apogee after 5 consecutive samples
-                    status_bits |= 0x0010; // Set Bit 4: Rocket altitude started decreasing
-                    status_bits |= 0x0020; // Set Bit 5: Drag parachute deployment command generated
                     drogue_deployed = 1;
                     deployed_velocity = 0;
-                    //deploy_drogue_parachute();
+                    durum_verisi = 7;
                 }
             } else {
                 apogee_counter = 0;
@@ -163,11 +162,9 @@ void flight_algorithm_update(BME_280_t* bme, bmi088_struct_t* bmi, sensor_fusion
             // Deploy main parachute at designated altitude
             if (drogue_deployed && bme->altitude < main_chute_altitude) {
                 current_phase = PHASE_MAIN_DESCENT;
-                status_bits |= 0x0040; // Set Bit 6: Rocket altitude below specified altitude
-                status_bits |= 0x0080; // Set Bit 7: Main parachute deployment command generated
                 main_deployed = 1;
                 drogue_deployed = 0;
-                deploy_main_parachute();
+                durum_verisi = 8;
             }
             break;
 
@@ -179,7 +176,6 @@ void flight_algorithm_update(BME_280_t* bme, bmi088_struct_t* bmi, sensor_fusion
             // No additional status bits to set after landing
             break;
     }
-    deploy_parachute_update();
     prev_altitude = bme->altitude;
 }
 
@@ -202,14 +198,10 @@ FlightPhase_t flight_algorithm_get_phase(void)
     return current_phase;
 }
 
-/**
- * @brief Get the current status bits
- */
-uint16_t flight_algorithm_get_status_bits(void)
+uint8_t flight_algorithm_get_durum_verisi(void)
 {
-    return status_bits;
+    return durum_verisi;
 }
-
 /**
  * @brief Set flight parameters
  */
@@ -229,32 +221,5 @@ uint32_t flight_algorithm_get_start_time(void)
     return flight_start_time;
 }
 
-void deploy_drogue_parachute(void)
-{
-    if (!drogue_pulse_active) {
-        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_SET);
-        drogue_pulse_start_time = HAL_GetTick();
-        drogue_pulse_active = 1;
-    }
-}
 
-void deploy_parachute_update(void)
-{
-    if (drogue_pulse_active && (HAL_GetTick() - drogue_pulse_start_time >= 1000)) {
-        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
-        drogue_pulse_active = 0;
-    }
-    if (main_pulse_active && (HAL_GetTick() - main_pulse_start_time >= 1000)) {
-        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, GPIO_PIN_RESET);
-        main_pulse_active = 0;
-    }
-}
 
-void deploy_main_parachute(void)
-{
-    if (!main_pulse_active) {
-        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, GPIO_PIN_SET);
-        main_pulse_start_time = HAL_GetTick();
-        main_pulse_active = 1;
-    }
-}

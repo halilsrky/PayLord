@@ -32,9 +32,29 @@ static void format_data(gps_data_t *gps_data_);
 
 void L86_GNSS_Init(UART_HandleTypeDef *huart_gnss_, L86_GNSS_BAUD_RATE baud_rate)
 {
+	// Global UART handle'ı ayarla
 	huart_gnss = huart_gnss_;
-	set_baud_rate(baud_rate);
-	HAL_UART_Receive_DMA(huart_gnss, (uint8_t *)gnss_rx_buffer, BUFFER_SIZE * 2);
+	
+	// Baud rate ayarlarını şimdilik atla (varsayılan 9600 kullan)
+	//set_baud_rate(baud_rate);
+	
+	// Buffer'ları temizle
+	memset(gnss_rx_buffer, 0, BUFFER_SIZE * 2);
+	memset(gps_buffer, 0, BUFFER_SIZE);
+	
+	// Eğer daha önce bir DMA işlemi varsa durdur
+	HAL_UART_DMAStop(huart_gnss);
+	HAL_Delay(50);
+	
+	// DMA ile UART receive'i başlat (circular mode)
+	HAL_StatusTypeDef status = HAL_UART_Receive_DMA(huart_gnss, (uint8_t *)gnss_rx_buffer, BUFFER_SIZE * 2);
+	
+	// Eğer başlatma başarısızsa, tekrar dene
+	if(status != HAL_OK)
+	{
+		HAL_Delay(100);
+		HAL_UART_Receive_DMA(huart_gnss, (uint8_t *)gnss_rx_buffer, BUFFER_SIZE * 2);
+	}
 }
 
 void HAL_UART_RxHalfCpltCallback(UART_HandleTypeDef *huart)
@@ -50,6 +70,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 	if(huart == huart_gnss)
 	{
 		process_data(&gnss_rx_buffer[BUFFER_SIZE], BUFFER_SIZE);
+		// DMA circular mode'da çalışıyor, yeniden başlatmaya gerek yok
 	}
 }
 

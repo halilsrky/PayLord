@@ -34,34 +34,34 @@ $(wildcard ../makefile.init) \
 $(wildcard ../makefile.targets) \
 
 
-BUILD_ARTIFACT_NAME := SkyLord2
+BUILD_ARTIFACT_NAME := PayLord
 BUILD_ARTIFACT_EXTENSION := elf
 BUILD_ARTIFACT_PREFIX :=
 BUILD_ARTIFACT := $(BUILD_ARTIFACT_PREFIX)$(BUILD_ARTIFACT_NAME)$(if $(BUILD_ARTIFACT_EXTENSION),.$(BUILD_ARTIFACT_EXTENSION),)
 
 # Add inputs and outputs from these tool invocations to the build variables 
 EXECUTABLES += \
-SkyLord2.elf \
+PayLord.elf \
 
 MAP_FILES += \
-SkyLord2.map \
+PayLord.map \
 
 SIZE_OUTPUT += \
 default.size.stdout \
 
 OBJDUMP_LIST += \
-SkyLord2.list \
+PayLord.list \
 
 
 # All Target
 all: main-build
 
 # Main-build Target
-main-build: SkyLord2.elf secondary-outputs
+main-build: PayLord.elf secondary-outputs
 
 # Tool invocations
-SkyLord2.elf SkyLord2.map: $(OBJS) $(USER_OBJS) C:\Users\Halil\STM32CubeIDE\workspace_1.14.1\SkyLord2\STM32F446RETX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "SkyLord2.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\Halil\STM32CubeIDE\workspace_1.14.1\SkyLord2\STM32F446RETX_FLASH.ld" --specs=nosys.specs -Wl,-Map="SkyLord2.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -u _printf_float -u _scanf_float -Wl,--start-group -lc -lm -Wl,--end-group
+PayLord.elf PayLord.map: $(OBJS) $(USER_OBJS) C:\Users\Halil\STM32CubeIDE\workspace_1.14.1\PayLord\STM32F446RETX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "PayLord.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\Halil\STM32CubeIDE\workspace_1.14.1\PayLord\STM32F446RETX_FLASH.ld" --specs=nosys.specs -Wl,-Map="PayLord.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -u _printf_float -u _scanf_float -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
@@ -70,14 +70,14 @@ default.size.stdout: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
 	@echo 'Finished building: $@'
 	@echo ' '
 
-SkyLord2.list: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-objdump -h -S $(EXECUTABLES) > "SkyLord2.list"
+PayLord.list: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-objdump -h -S $(EXECUTABLES) > "PayLord.list"
 	@echo 'Finished building: $@'
 	@echo ' '
 
 # Other Targets
 clean:
-	-$(RM) SkyLord2.elf SkyLord2.list SkyLord2.map default.size.stdout
+	-$(RM) PayLord.elf PayLord.list PayLord.map default.size.stdout
 	-@echo ' '
 
 secondary-outputs: $(SIZE_OUTPUT) $(OBJDUMP_LIST)
