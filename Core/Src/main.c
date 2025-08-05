@@ -135,7 +135,7 @@ static lorastruct e22_lora;
 // UART communication buffers
 uint8_t usart1_rx_buffer[36];
 static char uart_buffer[128];
-extern unsigned char normal_paket[51];  // Normal mode telemetry packet
+extern unsigned char normal_paket[38];  // Normal mode telemetry packet
 
 
 /*==================== TIMING AND STATUS FLAGS ====================*/
@@ -322,6 +322,7 @@ int main(void)
 
 		  // Package all sensor data into telemetry packet for ground station transmission
 		  addDataPacketNormal(&BME280_sensor, &BMI_sensor, &gnss_data, hmc1021_gauss);
+		  HAL_UART_Transmit(&huart2, (uint8_t*)normal_paket, 59, 100);
 
 		  // Update sensor readings and transmit data
 		  //read_value();
