@@ -103,6 +103,7 @@ ADC_HandleTypeDef hadc1;
 
 I2C_HandleTypeDef hi2c1;
 I2C_HandleTypeDef hi2c3;
+DMA_HandleTypeDef hdma_i2c1_rx;
 
 TIM_HandleTypeDef htim2;
 
@@ -314,15 +315,16 @@ int main(void)
 
 		  // Read magnetometer ADC values
 		  read_ADC();
-
+		  sensor_fusion_update_mahony(&BMI_sensor, &sensor_output);
+		  flight_algorithm_update(&BME280_sensor, &BMI_sensor, &sensor_output);
 		  // Update GPS/GNSS data
 		  L86_GNSS_Update(&gnss_data);
-		  //L86_GNSS_Print_Info(&gnss_data,&huart2);
 
 		  // Package all sensor data into telemetry packet for ground station transmission
 		  addDataPacketNormal(&BME280_sensor, &BMI_sensor, &gnss_data, hmc1021_gauss);
-		  uart2_send_packet_dma((uint8_t*)normal_paket, 38);
 
+		  uart2_send_packet_dma((uint8_t*)normal_paket, 38);
+		  lora_send_packet_dma((uint8_t*)normal_paket, 38);
 		  // Update sensor readings and transmit data
 		  //read_value();
 		}
@@ -662,6 +664,9 @@ static void MX_DMA_Init(void)
   __HAL_RCC_DMA1_CLK_ENABLE();
 
   /* DMA interrupt init */
+  /* DMA1_Stream0_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream0_IRQn);
   /* DMA1_Stream4_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Stream4_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream4_IRQn);
@@ -876,6 +881,29 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 	}
 	if (huart->Instance == USART2) {
 		usart2_tx_busy = 0;
+	}
+}
+
+/**
+ * @brief I2C Memory read complete callback (DMA)
+ * @param hi2c I2C handle
+ * @note Handles BMI088 sensor data DMA transfer completion
+ */
+void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c)
+{
+	if (hi2c->Instance == I2C1) {
+		// Check which device was being read based on device address
+		if (hi2c->Devaddress == ACC_I2C_ADD) {
+			// Accelerometer data received
+			if (hi2c->pBuffPtr == BMI_sensor.datas.raw_temp_data) {
+				bmi088_temp_dma_complete_callback(&BMI_sensor);
+			} else {
+				bmi088_accel_dma_complete_callback(&BMI_sensor);
+			}
+		} else if (hi2c->Devaddress == GYRO_I2C_ADD) {
+			// Gyroscope data received
+			bmi088_gyro_dma_complete_callback(&BMI_sensor);
+		}
 	}
 }
 

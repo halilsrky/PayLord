@@ -120,7 +120,7 @@ void addDataPacketNormal(BME_280_t* BME, bmi088_struct_t* BMI, gps_data_t* GPS, 
   normal_paket[5] = 0; // Sayac degeri = 0
 
   FLOAT32_UINT8_DONUSTURUCU irtifa_float32_uint8_donusturucu;
-  irtifa_float32_uint8_donusturucu.sayi = BME->altitude; // Irtifa degerinin atamasini yapiyoruz.
+  irtifa_float32_uint8_donusturucu.sayi = BMI->datas.acc_x; // Irtifa degerinin atamasini yapiyoruz.
   normal_paket[6] = irtifa_float32_uint8_donusturucu.array[0];
   normal_paket[7] = irtifa_float32_uint8_donusturucu.array[1];
   normal_paket[8] = irtifa_float32_uint8_donusturucu.array[2];
