@@ -66,7 +66,7 @@
 #include "l86_gnss.h"        // GPS/GNSS module
 
 /* Communication modules */
-#include "lora.h"            // LoRa wireless communication
+//#include "lora.h"            // LoRa wireless communication
 #include "packet.h"          // Telemetry packet handling
 
 
@@ -100,7 +100,6 @@
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
-DMA_HandleTypeDef hdma_adc1;
 
 I2C_HandleTypeDef hi2c1;
 I2C_HandleTypeDef hi2c3;
@@ -110,6 +109,8 @@ TIM_HandleTypeDef htim2;
 UART_HandleTypeDef huart4;
 UART_HandleTypeDef huart2;
 UART_HandleTypeDef huart6;
+DMA_HandleTypeDef hdma_uart4_tx;
+DMA_HandleTypeDef hdma_usart2_tx;
 DMA_HandleTypeDef hdma_usart6_rx;
 
 /* USER CODE BEGIN PV */
@@ -128,15 +129,13 @@ sensor_fusion_t sensor_output;
 // GPS/GNSS data structure
 gps_data_t gnss_data;
 
-// LoRa communication module structure
-static lorastruct e22_lora;
-
 /*==================== COMMUNICATION BUFFERS ====================*/
 // UART communication buffers
 uint8_t usart1_rx_buffer[36];
 static char uart_buffer[128];
 extern unsigned char normal_paket[38];  // Normal mode telemetry packet
-
+volatile uint8_t usart4_tx_busy = 0;       // UART4 transmission busy flag
+volatile uint8_t usart2_tx_busy = 0;       // UART2 transmission busy flag
 
 /*==================== TIMING AND STATUS FLAGS ====================*/
 // Timer flags for periodic operations
@@ -196,7 +195,8 @@ static void loraBegin();
 void read_value();
 void read_ADC(void);
 void trigger_sr_in_pulse(void);
-static void L86_GPIO_Init(void);             // Initialize L86 GPS GPIO pins
+void lora_send_packet_dma(uint8_t *data, uint16_t size);
+void uart2_send_packet_dma(uint8_t *data, uint16_t size);
 
 /* USER CODE END PFP */
 
@@ -272,9 +272,6 @@ int main(void)
 	bmi088_config(&BMI_sensor);
 	//get_offset(&BMI_sensor);
 
-	// Initialize HMC1021 ADC DMA for single-axis magnetometer readings
-	HAL_ADC_Start_DMA(&hadc1, (uint32_t*)hmc1021_adc_buffer, 1);
-
 
 	/*==================== SENSOR FUSION INITIALIZATION ====================*/
 	// Initialize quaternion-based sensor fusion
@@ -282,16 +279,18 @@ int main(void)
 	sensor_fusion_init(&BME280_sensor);
 
 	/* ==== LORA COMMUNICATION SETUP ==== */
-	lora_deactivate();
-	loraBegin();
-	lora_activate();
+	//lora_deactivate();
+	//loraBegin();
+	//lora_activate();
 
 	/* ==== GPS/GNSS INITIALIZATION ==== */
 	// Initialize L86 GPS/GNSS module
-	L86_GPIO_Init();
-	HAL_Delay(100);  // GPS modülün boot olması için daha fazla bekle
-	L86_GNSS_Init(&huart6, BAUD_RATE_9600);
-
+	HAL_UART_Transmit(&huart6, (uint8_t*)"$PMTK251,57600*2C\r\n", 19, 100);
+    HAL_UART_DeInit(&huart6);
+    huart6.Init.BaudRate = 57600;
+    HAL_UART_Init(&huart6);
+	HAL_DMA_Init(&hdma_usart6_rx);
+	L86_GNSS_Init(&huart6);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -322,7 +321,7 @@ int main(void)
 
 		  // Package all sensor data into telemetry packet for ground station transmission
 		  addDataPacketNormal(&BME280_sensor, &BMI_sensor, &gnss_data, hmc1021_gauss);
-		  HAL_UART_Transmit(&huart2, (uint8_t*)normal_paket, 59, 100);
+		  uart2_send_packet_dma((uint8_t*)normal_paket, 38);
 
 		  // Update sensor readings and transmit data
 		  //read_value();
@@ -412,13 +411,13 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
   hadc1.Init.Resolution = ADC_RESOLUTION_12B;
   hadc1.Init.ScanConvMode = DISABLE;
-  hadc1.Init.ContinuousConvMode = ENABLE;
+  hadc1.Init.ContinuousConvMode = DISABLE;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   hadc1.Init.NbrOfConversion = 1;
-  hadc1.Init.DMAContinuousRequests = ENABLE;
+  hadc1.Init.DMAContinuousRequests = DISABLE;
   hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
   {
@@ -429,7 +428,7 @@ static void MX_ADC1_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_9;
   sConfig.Rank = 1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_15CYCLES;
+  sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -660,11 +659,15 @@ static void MX_DMA_Init(void)
 
   /* DMA controller clock enable */
   __HAL_RCC_DMA2_CLK_ENABLE();
+  __HAL_RCC_DMA1_CLK_ENABLE();
 
   /* DMA interrupt init */
-  /* DMA2_Stream0_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
+  /* DMA1_Stream4_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream4_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream4_IRQn);
+  /* DMA1_Stream6_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream6_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream6_IRQn);
   /* DMA2_Stream2_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream2_IRQn);
@@ -768,58 +771,6 @@ uint8_t bmi_imu_init(void)
 }
 
 /**
- * @brief Initialize LoRa communication module
- * @note Configures E22 LoRa module with communication parameters
- */
-void loraBegin()
-{
-  HAL_Delay(100);
-
-  // Set LoRa module to configuration mode
-  HAL_GPIO_WritePin(RF_M0_GPIO_Port, RF_M0_Pin, RESET);
-  HAL_GPIO_WritePin(RF_M1_GPIO_Port, RF_M1_Pin, SET);
-  HAL_Delay(100);
-
-  // Configure LoRa parameters
-  e22_lora.baudRate = LORA_BAUD_9600;
-  e22_lora.airRate = LORA_AIR_RATE_2_4k;
-  e22_lora.packetSize = LORA_SUB_PACKET_64_BYTES;
-  e22_lora.power = LORA_POWER_37dbm;
-  e22_lora.loraAddress.address16 = 0x0000;
-  e22_lora.loraKey.key16 = 0x0000;
-  e22_lora.channel = ROCKET_TELEM_FREQ;
-
-  lora_configure(&e22_lora);
-  HAL_Delay(1000);
-}
-
-/**
- * @brief Initialize L86 GPS/GNSS GPIO pins
- * @note Configures UART5 pins for GPS communication
- */
-static void L86_GPIO_Init(void)
-{
-  GPIO_InitTypeDef GPIO_InitStruct_UART6_TX;
-  GPIO_InitTypeDef GPIO_InitStruct_UART6_RX;
-
-  // Configure UART5 TX pin
-  GPIO_InitStruct_UART6_TX.Pin = L86_TX_Pin;
-  GPIO_InitStruct_UART6_TX.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct_UART6_TX.Pull = GPIO_NOPULL;
-  GPIO_InitStruct_UART6_TX.Speed = GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct_UART6_TX.Alternate = GPIO_AF8_USART6;
-  HAL_GPIO_Init(L86_TX_GPIO_Port, &GPIO_InitStruct_UART6_TX);
-
-  // Configure UART5 RX pin
-  GPIO_InitStruct_UART6_RX.Pin = L86_RX_Pin;
-  GPIO_InitStruct_UART6_RX.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct_UART6_RX.Pull = GPIO_NOPULL;
-  GPIO_InitStruct_UART6_RX.Speed = GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct_UART6_RX.Alternate = GPIO_AF8_USART6;
-  HAL_GPIO_Init(L86_RX_GPIO_Port, &GPIO_InitStruct_UART6_RX);
-}
-
-/**
  * @brief Read and transmit sensor values via UART
  * @note Formats and sends IMU orientation data and system parameters
  */
@@ -852,26 +803,22 @@ void read_value(){
  * @brief Read HMC1021 magnetometer ADC values
  * @note Converts ADC readings to magnetic field strength and transmits data
  */
-void read_ADC(void)
+void read_ADC()
 {
-  if(adc_conversion_complete)
-  {
-    adc_conversion_complete = 0;
-    
-    // Convert ADC value to voltage (3.3V reference, 12-bit ADC)
-    hmc1021_voltage = (float)hmc1021_adc_buffer[0] * 3.3f / 4095.0f;
-    
-    // Convert voltage to magnetic field (±1 Gauss range with 1V/Gauss sensitivity)
-    // Assuming 1.65V is zero field (VCC/2)
+    static uint16_t adc1_raw = 0;  // ADC1 değeri (Channel 9)
+
+    // ADC1 okuma
+    HAL_ADC_Start(&hadc1);
+    if (HAL_ADC_PollForConversion(&hadc1, 5) == HAL_OK) {
+        adc1_raw = HAL_ADC_GetValue(&hadc1);
+    }
+    HAL_ADC_Stop(&hadc1);
+
+
+    // Kalibrasyonlu değerleri hesapla
+    hmc1021_voltage = (adc1_raw * 3.3f) / 4096.0f;  // 3.3V referans, 12-bit ADC
     hmc1021_gauss = (hmc1021_voltage - 1.65f) / 1.0f;  // 1V/Gauss sensitivity
-    
-    // Send magnetometer data via UART (single axis)
-    sprintf(uart_buffer, "MAG %.3f %.3f\r\n", hmc1021_gauss, hmc1021_voltage);
-    HAL_UART_Transmit(&huart2, (uint8_t*)uart_buffer, strlen(uart_buffer), 100);
-    
-    // Restart ADC DMA for next conversion
-    HAL_ADC_Start_DMA(&hadc1, (uint32_t*)hmc1021_adc_buffer, 1);
-  }
+
 }
 
 /**
@@ -882,8 +829,6 @@ void trigger_sr_in_pulse(void)
 {
   // Set SR_IN pin HIGH (PB12)
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
-
-  HAL_Delay(1);
   // Set SR_IN pin LOW (PB12)
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
 }
@@ -919,18 +864,47 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     tx_timer_flag_1s++;      // 1s flag (counts to 10)
   }
 }
+/**
+ * @brief UART transmission complete callback
+ * @param huart UART handle
+ * @note Clears transmission busy flag
+ */
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+	if (huart->Instance == UART4) {
+		usart4_tx_busy = 0;
+	}
+	if (huart->Instance == USART2) {
+		usart2_tx_busy = 0;
+	}
+}
 
 /**
- * @brief ADC DMA conversion complete callback
- * @param hadc ADC handle
- * @note Sets flag when magnetometer ADC conversion is complete
+ * @brief Send packet via UART4 using DMA
+ * @param data Pointer to data buffer
+ * @param size Size of data to send
+ * @note Non-blocking transmission using DMA
  */
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
+void uart2_send_packet_dma(uint8_t *data, uint16_t size)
 {
-  if(hadc->Instance == ADC1)
-  {
-    adc_conversion_complete = 1;
-  }
+	if (!usart2_tx_busy) {
+		usart2_tx_busy = 1;
+		HAL_UART_Transmit_DMA(&huart2, data, size);
+	}
+}
+
+/**
+ * @brief Send packet with LORA using DMA
+ * @param data Pointer to data buffer
+ * @param size Size of data to send
+ * @note Non-blocking transmission using DMA
+ */
+void lora_send_packet_dma(uint8_t *data, uint16_t size)
+{
+	if (!usart4_tx_busy) {
+		usart4_tx_busy = 1;
+		HAL_UART_Transmit_DMA(&huart4, data, size);
+	}
 }
 
 /* USER CODE END 4 */

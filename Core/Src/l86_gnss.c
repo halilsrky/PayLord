@@ -11,6 +11,10 @@ UART_HandleTypeDef *huart_gnss;
 char gnss_rx_buffer[BUFFER_SIZE * 2];
 char gps_buffer[BUFFER_SIZE];
 
+// Add buffer synchronization
+static volatile uint8_t buffer_ready_flag = 0;
+static volatile uint8_t active_buffer = 0; // 0 = first half, 1 = second half
+
 static char *gps_GNRMC_start_point = NULL;
 static char *gps_GPGGA_start_point = NULL;
 static uint8_t is_data_valid;
@@ -30,38 +34,22 @@ static void get_GNRMC_data(gps_data_t *gps_data_);
 static void get_GPGGA_data(gps_data_t *gps_data_);
 static void format_data(gps_data_t *gps_data_);
 
-void L86_GNSS_Init(UART_HandleTypeDef *huart_gnss_, L86_GNSS_BAUD_RATE baud_rate)
+void L86_GNSS_Init(UART_HandleTypeDef *huart_gnss_)
 {
-	// Global UART handle'ı ayarla
 	huart_gnss = huart_gnss_;
-	
-	// Baud rate ayarlarını şimdilik atla (varsayılan 9600 kullan)
-	//set_baud_rate(baud_rate);
-	
-	// Buffer'ları temizle
-	memset(gnss_rx_buffer, 0, BUFFER_SIZE * 2);
-	memset(gps_buffer, 0, BUFFER_SIZE);
-	
-	// Eğer daha önce bir DMA işlemi varsa durdur
-	HAL_UART_DMAStop(huart_gnss);
-	HAL_Delay(50);
-	
-	// DMA ile UART receive'i başlat (circular mode)
-	HAL_StatusTypeDef status = HAL_UART_Receive_DMA(huart_gnss, (uint8_t *)gnss_rx_buffer, BUFFER_SIZE * 2);
-	
-	// Eğer başlatma başarısızsa, tekrar dene
-	if(status != HAL_OK)
-	{
-		HAL_Delay(100);
-		HAL_UART_Receive_DMA(huart_gnss, (uint8_t *)gnss_rx_buffer, BUFFER_SIZE * 2);
-	}
+	HAL_UART_Receive_DMA(huart_gnss, (uint8_t *)gnss_rx_buffer, BUFFER_SIZE * 2);
 }
 
 void HAL_UART_RxHalfCpltCallback(UART_HandleTypeDef *huart)
 {
 	if(huart == huart_gnss)
 	{
+		// Disable interrupts briefly to prevent race condition
+		__disable_irq();
 		process_data(gnss_rx_buffer, BUFFER_SIZE);
+		active_buffer = 0;
+		buffer_ready_flag = 1;
+		__enable_irq();
 	}
 }
 
@@ -69,16 +57,28 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
 	if(huart == huart_gnss)
 	{
+		// Disable interrupts briefly to prevent race condition
+		__disable_irq();
 		process_data(&gnss_rx_buffer[BUFFER_SIZE], BUFFER_SIZE);
-		// DMA circular mode'da çalışıyor, yeniden başlatmaya gerek yok
+		active_buffer = 1;
+		buffer_ready_flag = 1;
+		__enable_irq();
 	}
 }
 
 void L86_GNSS_Update(gps_data_t *gps_data_)
 {
-	get_GNRMC_data(gps_data_);
-	get_GPGGA_data(gps_data_);
-	format_data(gps_data_);
+	// Only process if new data is available
+	if (buffer_ready_flag)
+	{
+		__disable_irq();
+		buffer_ready_flag = 0;
+		__enable_irq();
+		
+		get_GNRMC_data(gps_data_);
+		get_GPGGA_data(gps_data_);
+		format_data(gps_data_);
+	}
 }
 
 void L86_GNSS_Print_Info(gps_data_t *gps_data_, UART_HandleTypeDef *huart_Seri_Port)
@@ -102,56 +102,34 @@ void L86_GNSS_Print_Info(gps_data_t *gps_data_, UART_HandleTypeDef *huart_Seri_P
 	HAL_UART_Transmit(huart_Seri_Port, (uint8_t *)msg, strlen(msg), HAL_MAX_DELAY);
 }
 
-static void set_baud_rate(L86_GNSS_BAUD_RATE baud_rate)
-{
-	char commend_buffer[COMMEND_BUFFER_SIZE];
-
-	memset(commend_buffer, 0, COMMEND_BUFFER_SIZE);
-	snprintf(commend_buffer, COMMEND_BUFFER_SIZE, "PMTK251,%ul", baud_rate);
-	uint8_t checksum = calculate_checksum(commend_buffer);
-
-	memset(commend_buffer, 0, COMMEND_BUFFER_SIZE);
-	snprintf(commend_buffer, COMMEND_BUFFER_SIZE, "$PMTK251,%ul*%02X\r\n", baud_rate, checksum);
-
-	HAL_UART_Transmit(huart_gnss, (uint8_t *)commend_buffer, strlen(commend_buffer), 100);
-	HAL_Delay(100);
-
-	HAL_UART_DeInit(huart_gnss);
-	huart_gnss->Instance = GNSS_UART;
-	huart_gnss->Init.BaudRate = baud_rate;
-	huart_gnss->Init.WordLength = UART_WORDLENGTH_8B;
-	huart_gnss->Init.StopBits = UART_STOPBITS_1;
-	huart_gnss->Init.Parity = UART_PARITY_NONE;
-	huart_gnss->Init.Mode = UART_MODE_TX_RX;
-	huart_gnss->Init.HwFlowCtl = UART_HWCONTROL_NONE;
-	huart_gnss->Init.OverSampling = UART_OVERSAMPLING_16;
-	HAL_UART_Init(huart_gnss);
-}
-
-static uint8_t calculate_checksum(const char *data)
-{
-    uint8_t check_sum = 0;
-    int i = 0;
-	while(data[i] != '\0')
-	{
-        check_sum ^= data[i];
-        i++;
-	}
-	return check_sum;
-}
-
 static void process_data(char *rx_buffer, uint16_t buffer_size)
 {
+	// Ensure null termination for string functions
 	memcpy(gps_buffer, rx_buffer, buffer_size);
+	
+	// Add null termination at the end to prevent buffer overflow
+	if (buffer_size < BUFFER_SIZE) {
+		gps_buffer[buffer_size] = '\0';
+	} else {
+		gps_buffer[BUFFER_SIZE - 1] = '\0';
+	}
 }
 
 static void get_GNRMC_data(gps_data_t *gps_data_)
 {
 	gps_GNRMC_start_point = strstr(gps_buffer, "GNRMC");
 
-	if(gps_GNRMC_start_point != NULL && *(gps_GNRMC_start_point + 17) == VALID)
+	if(gps_GNRMC_start_point != NULL && (gps_GNRMC_start_point + 17) < (gps_buffer + BUFFER_SIZE))
 	{
-		is_data_valid = 1;
+		if (*(gps_GNRMC_start_point + 17) == VALID)
+		{
+			is_data_valid = 1;
+		}
+		else
+		{
+			is_data_valid = 0;
+			gps_data_->is_valid = INVALID;
+		}
 	}
 	else
 	{
@@ -164,12 +142,16 @@ static void get_GNRMC_data(gps_data_t *gps_data_)
 		memset(current_data, 0, DATA_SIZE);
 		counter = 0;
 		current_char = gps_GNRMC_start_point;
-		while(*current_char != '*')
+		
+		// Improved bounds checking
+		while(*current_char != '*' && counter < (DATA_SIZE - 1) && 
+			  current_char < (gps_buffer + BUFFER_SIZE))
 		{
 			current_data[counter] = *current_char;
 			counter++;
 			current_char++;
 		}
+		current_data[counter] = '\0'; // Ensure null termination
 
 		sscanf(current_data, "GNRMC,%f,%c,%f,%c,%f,%c,%f,%f,%lu,,,%c",
 				&gps_data_->non_fixed_time, &gps_data_->is_valid, &gps_data_->non_fixed_latitude, &gps_data_->N_S,
@@ -184,19 +166,23 @@ static void get_GPGGA_data(gps_data_t *gps_data_)
 {
 	gps_GPGGA_start_point = strstr(gps_buffer, "GPGGA");
 
-	if(gps_GPGGA_start_point != NULL)
+	if(gps_GPGGA_start_point != NULL && gps_GPGGA_start_point < (gps_buffer + BUFFER_SIZE))
 	{
 		if(gps_data_->is_valid == VALID)
 		{
 			memset(current_data, 0, DATA_SIZE);
 			counter = 0;
 			current_char = gps_GPGGA_start_point;
-			while(*(current_char) != '*')
+			
+			// Improved bounds checking
+			while(*(current_char) != '*' && counter < (DATA_SIZE - 1) && 
+				  current_char < (gps_buffer + BUFFER_SIZE))
 			{
 				current_data[counter] = *current_char;
 				counter++;
 				current_char++;
 			}
+			current_data[counter] = '\0'; // Ensure null termination
 
 			sscanf(current_data, "GPGGA,%f,%f,%c,%f,%c,%u,%u,%f,%f,M,%f,M,,",
 					&gps_data_->non_fixed_time, &gps_data_->non_fixed_latitude, &gps_data_->N_S,

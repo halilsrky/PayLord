@@ -34,11 +34,10 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
  ../Core/Inc/configuration.h ../Core/Inc/bme280.h ../Core/Inc/main.h \
  ../Core/Inc/bmi088.h ../Core/Inc/configuration.h ../Core/Inc/l86_gnss.h \
- ../Core/Inc/lora.h ../Core/Inc/bme280.h ../Core/Inc/bmi088.h \
- ../Core/Inc/packet.h ../Core/Inc/l86_gnss.h \
- ../Core/Inc/flight_algorithm.h ../Core/Inc/sensor_fusion.h \
- ../Core/Inc/queternion.h ../Core/Inc/sensor_fusion.h \
- ../Core/Inc/flight_algorithm.h
+ ../Core/Inc/packet.h ../Core/Inc/bmi088.h ../Core/Inc/bme280.h \
+ ../Core/Inc/l86_gnss.h ../Core/Inc/flight_algorithm.h \
+ ../Core/Inc/sensor_fusion.h ../Core/Inc/queternion.h \
+ ../Core/Inc/sensor_fusion.h ../Core/Inc/flight_algorithm.h
 ../Core/Inc/main.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h:
 ../Core/Inc/stm32f4xx_hal_conf.h:
@@ -79,10 +78,9 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
 ../Core/Inc/bmi088.h:
 ../Core/Inc/configuration.h:
 ../Core/Inc/l86_gnss.h:
-../Core/Inc/lora.h:
-../Core/Inc/bme280.h:
-../Core/Inc/bmi088.h:
 ../Core/Inc/packet.h:
+../Core/Inc/bmi088.h:
+../Core/Inc/bme280.h:
 ../Core/Inc/l86_gnss.h:
 ../Core/Inc/flight_algorithm.h:
 ../Core/Inc/sensor_fusion.h:
