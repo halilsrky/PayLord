@@ -13,6 +13,18 @@
 #include "sensor_fusion.h"
 #include <stdint.h>
 
+// Flight Status Bits
+#define BIT_LAUNCH_DETECTED       0x0001  // Launch detected by acceleration threshold
+#define BIT_BURNOUT_TIMEOUT       0x0002  // Burnout timeout period elapsed
+#define BIT_MIN_ALTITUDE_PASSED   0x0004  // Minimum arming altitude passed
+#define BIT_HIGH_ANGLE_OR_ACCEL   0x0008  // High angle detected for drogue deployment
+#define BIT_DESCENT_STARTED       0x0010  // Descent detected for drogue deployment
+#define BIT_BELOW_MAIN_ALTITUDE   0x0020  // Below main parachute deployment altitude
+#define BIT_LANDED                0x0040  // Rocket landed (not currently used)
+#define BIT_SENSOR_ERROR          0x0080  // Sensor error detected
+#define BIT_DROGUE_DEPLOYED       0x0100  // Drogue parachute deployed
+#define BIT_MAIN_DEPLOYED         0x0200  // Main parachute deployed
+
 // Flight phases
 typedef enum {
     PHASE_IDLE,             // Pre-launch, on pad
@@ -51,6 +63,7 @@ FlightPhase_t flight_algorithm_get_phase(void);
  * @brief Get the current status bits
  * @return Status bits as a 16-bit value
  */
+uint16_t flight_algorithm_get_status_bits(void);
 uint8_t flight_algorithm_get_durum_verisi(void);
 
 /**
@@ -65,8 +78,4 @@ void flight_algorithm_set_parameters(float launch_accel_threshold,
                                     float main_chute_altitude,
                                     float max_angle_threshold);
 
-
-void deploy_drogue_parachute(void);
-void deploy_main_parachute(void);
-void deploy_parachute_update(void);
 #endif /* INC_FLIGHT_ALGORITHM_H_ */

@@ -15,11 +15,6 @@
 #include <math.h>
 #include <stdlib.h>
 
-// Forward declaration for Error_Handler
-void Error_Handler(void);
-
-#define GNSS_UART USART6
-
 #define BUFFER_SIZE 1200
 #define MSG_SIZE 400
 #define DATA_SIZE 120

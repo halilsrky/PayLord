@@ -297,32 +297,81 @@ return roll;
 }
 
 void getInitialQuaternion() {
+    // Accelerometer verilerini kontrol et
+    if(BMI_sensor.datas.acc_x == 0.0f && BMI_sensor.datas.acc_y == 0.0f && BMI_sensor.datas.acc_z == 0.0f) {
+        // Geçersiz accelerometer verisi varsa varsayılan değerleri kullan
+        q[0] = 1.0f;
+        q[1] = 0.0f;
+        q[2] = 0.0f;
+        q[3] = 0.0f;
+        return;
+    }
 
-    double norm = sqrt(BMI_sensor.datas.acc_z * BMI_sensor.datas.acc_z + BMI_sensor.datas.acc_x * BMI_sensor.datas.acc_x + BMI_sensor.datas.acc_y * BMI_sensor.datas.acc_y);
-    double accel_temp[3];
+    // Accelerometer verilerini normalize et
+    float norm = sqrtf(BMI_sensor.datas.acc_x * BMI_sensor.datas.acc_x + 
+                       BMI_sensor.datas.acc_y * BMI_sensor.datas.acc_y + 
+                       BMI_sensor.datas.acc_z * BMI_sensor.datas.acc_z);
+    
+    if(norm < 1e-6f) {
+        // Çok küçük norm varsa varsayılan değerleri kullan
+        q[0] = 1.0f;
+        q[1] = 0.0f;
+        q[2] = 0.0f;
+        q[3] = 0.0f;
+        return;
+    }
 
-    accel_temp[0] = (double)BMI_sensor.datas.acc_y;
-    accel_temp[1] = (double)-BMI_sensor.datas.acc_z;
-    accel_temp[2] = (double)BMI_sensor.datas.acc_x;
+    float ax = BMI_sensor.datas.acc_x / norm;
+    float ay = BMI_sensor.datas.acc_y / norm;
+    float az = BMI_sensor.datas.acc_z / norm;
 
-    accel_temp[0] /= norm;
-    accel_temp[1] /= norm;
-    accel_temp[2] /= norm;
+    // Gravity vektörü [0, 0, 1] ile align etmek için quaternion hesapla
+    // az gravity'nin ne kadar Z ekseniyle hizalı olduğunu gösterir
+    
+    if(az >= 0.0f) {
+        // Normal durum: az pozitif
+        float s = sqrtf(2.0f * (1.0f + az));
+        if(s < 1e-6f) {
+            q[0] = 1.0f;
+            q[1] = 0.0f;
+            q[2] = 0.0f;
+            q[3] = 0.0f;
+        } else {
+            q[0] = s * 0.5f;
+            q[1] = ay / s;
+            q[2] = -ax / s;
+            q[3] = 0.0f;
+        }
+    } else {
+        // az negatif durum
+        float s = sqrtf(2.0f * (1.0f - az));
+        if(s < 1e-6f) {
+            q[0] = 0.0f;
+            q[1] = 1.0f;
+            q[2] = 0.0f;
+            q[3] = 0.0f;
+        } else {
+            q[0] = ay / s;
+            q[1] = s * 0.5f;
+            q[2] = 0.0f;
+            q[3] = -ax / s;
+        }
+    }
 
-    double q_temp[4];
-
-    q_temp[0] = sqrt(1.0 -accel_temp[1]) * 0.5;
-    double k = 0.5 / q_temp[0];
-    q_temp[1] = accel_temp[0] * k * 0.5;
-    q_temp[2] = accel_temp[2] * k * 0.5;
-    q_temp[3] = 0.0;
-
-    norm = sqrt(q_temp[0] * q_temp[0] + q_temp[1] * q_temp[1] + q_temp[2] * q_temp[2] + q_temp[3] * q_temp[3]);
-
-    q[0] = q_temp[0] / norm;
-    q[1] = q_temp[1] / norm;
-    q[2] = q_temp[2] / norm;
-    q[3] = 0.0f;
+    // Quaternion'u normalize et
+    norm = sqrtf(q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3]);
+    if(norm > 1e-6f) {
+        q[0] /= norm;
+        q[1] /= norm;
+        q[2] /= norm;
+        q[3] /= norm;
+    } else {
+        // Normalize edilemiyorsa varsayılan değerleri kullan
+        q[0] = 1.0f;
+        q[1] = 0.0f;
+        q[2] = 0.0f;
+        q[3] = 0.0f;
+    }
 }
 
 float invSqrt(float x) {

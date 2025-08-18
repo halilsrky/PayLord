@@ -1,5 +1,6 @@
 "./Core/Src/bme280.o"
 "./Core/Src/bmi088.o"
+"./Core/Src/e22_lib.o"
 "./Core/Src/flight_algorithm.o"
 "./Core/Src/kalman.o"
 "./Core/Src/l86_gnss.o"

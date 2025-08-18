@@ -10,6 +10,6 @@
 ../Core/Src/queternion.c:284:7:quaternionToYaw	16	static
 ../Core/Src/queternion.c:289:7:quaternionToPitch	16	static
 ../Core/Src/queternion.c:294:7:quaternionToRoll	16	static
-../Core/Src/queternion.c:299:6:getInitialQuaternion	88	static
-../Core/Src/queternion.c:328:7:invSqrt	32	static
-../Core/Src/queternion.c:338:8:getQuaternion	4	static
+../Core/Src/queternion.c:299:6:getInitialQuaternion	32	static
+../Core/Src/queternion.c:377:7:invSqrt	32	static
+../Core/Src/queternion.c:387:8:getQuaternion	4	static

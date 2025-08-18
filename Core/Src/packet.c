@@ -88,7 +88,7 @@ void addDataPacketNormal(BME_280_t* BME, bmi088_struct_t* BMI, sensor_fusion_t* 
   normal_paket[36] = basinc_float32_uint8_donusturucu.array[3];
 
   FLOAT32_UINT8_DONUSTURUCU manyetik_alan_float32_uint8_donusturucu;
-  manyetik_alan_float32_uint8_donusturucu.sayi = (sensor->velocity); // Manyetik alan degerinin atamasini yapiyoruz.
+  manyetik_alan_float32_uint8_donusturucu.sayi = (hmc1021_gauss); // Manyetik alan degerinin atamasini yapiyoruz.
   normal_paket[37] = manyetik_alan_float32_uint8_donusturucu.array[0];
   normal_paket[38] = manyetik_alan_float32_uint8_donusturucu.array[1];
   normal_paket[39] = manyetik_alan_float32_uint8_donusturucu.array[2];

@@ -66,7 +66,7 @@
 #include "l86_gnss.h"        // GPS/GNSS module
 
 /* Communication modules */
-//#include "lora.h"            // LoRa wireless communication
+#include "e22_lib.h"           // LoRa wireless communication
 #include "packet.h"          // Telemetry packet handling
 
 
@@ -120,17 +120,12 @@ DMA_HandleTypeDef hdma_usart6_rx;
 
 /*==================== SENSOR STRUCTURES ====================*/
 // Environmental sensor (BME280) - temperature, humidity, pressure
-static BME_280_t BME280_sensor;
-BME_parameters_t bme_params;
-
-// Inertial measurement unit (BMI088) - accelerometer and gyroscope
-bmi088_struct_t BMI_sensor;
-
-// Sensor fusion output data structure
-sensor_fusion_t sensor_output;
-
-// GPS/GNSS data structure
-gps_data_t gnss_data;
+static BME_280_t BME280_sensor;         // BME280 barometric pressure sensor
+bmi088_struct_t BMI_sensor;             // BMI088 IMU sensor (accelerometer + gyroscope)
+sensor_fusion_t sensor_output;          // Sensor fusion output data
+BME_parameters_t bme_params;             // BME280 calibration parameters
+gps_data_t gnss_data;                  // L86 GNSS receiver data
+static e22_conf_struct_t lora_1;
 
 /*==================== COMMUNICATION BUFFERS ====================*/
 // UART communication buffers
@@ -201,6 +196,7 @@ void read_ADC(void);
 void trigger_sr_in_pulse(void);
 void lora_send_packet_dma(uint8_t *data, uint16_t size);
 void uart2_send_packet_dma(uint8_t *data, uint16_t size);
+void lora_init(void);                 // Initialize LoRa E22 module
 
 /* USER CODE END PFP */
 
@@ -276,7 +272,7 @@ int main(void)
 	// Initialize BMI088 IMU (accelerometer and gyroscope)
 	bmi_imu_init();
 	bmi088_config(&BMI_sensor);
-	//get_offset(&BMI_sensor);
+	get_offset(&BMI_sensor);
 
 
 	/*==================== SENSOR FUSION INITIALIZATION ====================*/
@@ -285,9 +281,11 @@ int main(void)
 	sensor_fusion_init(&BME280_sensor);
 
 	/* ==== LORA COMMUNICATION SETUP ==== */
-	//lora_deactivate();
-	//loraBegin();
-	//lora_activate();
+    e22_config_mode(&lora_1);
+    HAL_Delay(20);
+	lora_init();
+    HAL_Delay(20);
+	e22_transmit_mode(&lora_1);
 
 	/* ==== GPS/GNSS INITIALIZATION ==== */
 	// Initialize L86 GPS/GNSS module
@@ -310,7 +308,6 @@ int main(void)
 		/*CONTINUOUS SENSOR UPDATES*/
 		bmi088_update(&BMI_sensor);		// Update IMU sensor data (accelerometer + gyroscope) - High frequency sampling
 		bme280_update(); 		// Update barometric pressure sensor data for altitude estimation
-		//read_value();	// Transmit current sensor readings
 
 
 		/*PERIODIC OPERATIONS (100ms)*/
@@ -326,8 +323,8 @@ int main(void)
 		  L86_GNSS_Update(&gnss_data);
 
 		  // Package all sensor data into telemetry packet for ground station transmission
-		  addDataPacketNormal(&BME280_sensor, &BMI_sensor, &gnss_data, &sensor_output, hmc1021_gauss, voltage_V, current_mA);
-		  //read_value();
+		  addDataPacketNormal(&BME280_sensor, &BMI_sensor, &sensor_output, &gnss_data, hmc1021_gauss, voltage_V, current_mA);
+		  //read_value(); // Debug output - Show all quaternion values
 		  uart2_send_packet_dma((uint8_t*)normal_paket, 49);
 		  lora_send_packet_dma((uint8_t*)normal_paket, 49);
 		  // Update sensor readings and transmit data
@@ -845,6 +842,36 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 
 /**
+ * @brief Initialize LoRa E22 module
+ * @note Configures LoRa module for telemetry transmission
+ */
+void lora_init(void)
+{
+	lora_1.baud_rate 		= 	E22_BAUD_RATE_115200;
+	lora_1.parity_bit		=	E22_PARITY_8N1;
+	lora_1.air_rate			=	E22_AIR_DATA_RATE_38400;
+	lora_1.packet_size		=	E22_PACKET_SIZE_64;
+	lora_1.rssi_noise		=	E22_RSSI_NOISE_DISABLE;
+	lora_1.power			=	E22_TRANSMITTING_POWER_22;
+	lora_1.rssi_enable		=	E22_ENABLE_RSSI_DISABLE;
+	lora_1.mode				= 	E22_TRANSMISSION_MODE_TRANSPARENT;
+	lora_1.repeater_func	=	E22_REPEATER_FUNC_DISABLE;
+	lora_1.lbt				=	E22_LBT_DISABLE;
+	lora_1.wor				=	E22_WOR_RECEIVER;
+	lora_1.wor_cycle		=	E22_WOR_CYCLE_1000;
+	lora_1.channel			=	25;
+
+	e22_init(&lora_1, &huart4);
+
+	HAL_UART_DeInit(&huart4);
+	HAL_Delay(20);
+	huart4.Init.BaudRate = 115200;
+	HAL_Delay(20);
+	HAL_UART_Init(&huart4);
+
+}
+
+/**
  * @brief Initialize BME280 environmental sensor
  * @note Configures BME280 with predefined settings for normal operation
  */
@@ -889,19 +916,28 @@ uint8_t bmi_imu_init(void)
  * @note Formats and sends IMU orientation data and system parameters
  */
 void read_value(){
-  float yaw = BMI_sensor.datas.gyro_x;
-  float pitch = BMI_sensor.datas.acc_x;
-  float roll = BMI_sensor.datas.delta_time;
-  float yaw1 = BMI_sensor.datas.yaw1;
-  float pitch1 = BMI_sensor.datas.pitch1;
-  float roll1 = BMI_sensor.datas.roll1;
+  // Quaternion değerlerini test et
+  float yaw = BMI_sensor.datas.yaw;     // Mahony'den
+  float pitch = BMI_sensor.datas.pitch; // Mahony'den  
+  float roll = BMI_sensor.datas.roll;   // Mahony'den
+  float theta = BMI_sensor.datas.theta; // Z açısı
+  float yaw1 = BMI_sensor.datas.yaw1;   // EKF'den
+  float pitch1 = BMI_sensor.datas.pitch1; // EKF'den
+  float roll1 = BMI_sensor.datas.roll1;   // EKF'den
 
-  // Transmit primary orientation data
-  sprintf(uart_buffer, "A1 %.2f %.2f %.2f\r", yaw, pitch, roll);
+  // Transmit Mahony quaternion data
+  sprintf(uart_buffer, "MAHONY: Y:%.2f P:%.2f R:%.2f T:%.2f\r\n", yaw, pitch, roll, theta);
   HAL_UART_Transmit(&huart2, (uint8_t*)uart_buffer, strlen(uart_buffer), 100);
 
-  // Transmit secondary orientation data
-  sprintf(uart_buffer, "A2 %.2f %.2f %.2f\r\n", yaw1, pitch1, roll1);
+  // Transmit EKF quaternion data
+  sprintf(uart_buffer, "EKF: Y:%.2f P:%.2f R:%.2f\r\n", yaw1, pitch1, roll1);
+  HAL_UART_Transmit(&huart2, (uint8_t*)uart_buffer, strlen(uart_buffer), 100);
+
+  // Transmit raw sensor data for debug
+  sprintf(uart_buffer, "GYRO: X:%.3f Y:%.3f Z:%.3f\r\n", BMI_sensor.datas.gyro_x, BMI_sensor.datas.gyro_y, BMI_sensor.datas.gyro_z);
+  HAL_UART_Transmit(&huart2, (uint8_t*)uart_buffer, strlen(uart_buffer), 100);
+
+  sprintf(uart_buffer, "ACC: X:%.3f Y:%.3f Z:%.3f DT:%.3f\r\n", BMI_sensor.datas.acc_x, BMI_sensor.datas.acc_y, BMI_sensor.datas.acc_z, BMI_sensor.datas.delta_time);
   HAL_UART_Transmit(&huart2, (uint8_t*)uart_buffer, strlen(uart_buffer), 100);
 
   // Transmit system gain parameter
@@ -909,7 +945,7 @@ void read_value(){
   HAL_UART_Transmit(&huart2, (uint8_t*)uart_buffer, strlen(uart_buffer), 100);
 
   // Transmit gyro-only mode status
-  sprintf(uart_buffer, "M %d\r", gyroOnlyMode);
+  sprintf(uart_buffer, "M %d\r\n", gyroOnlyMode);
   HAL_UART_Transmit(&huart2, (uint8_t*)uart_buffer, strlen(uart_buffer), 100);
 }
 

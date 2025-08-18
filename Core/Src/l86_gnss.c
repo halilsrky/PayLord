@@ -11,10 +11,6 @@ UART_HandleTypeDef *huart_gnss;
 char gnss_rx_buffer[BUFFER_SIZE * 2];
 char gps_buffer[BUFFER_SIZE];
 
-// Add buffer synchronization
-static volatile uint8_t buffer_ready_flag = 0;
-static volatile uint8_t active_buffer = 0; // 0 = first half, 1 = second half
-
 static char *gps_GNRMC_start_point = NULL;
 static char *gps_GPGGA_start_point = NULL;
 static uint8_t is_data_valid;
@@ -27,8 +23,6 @@ static float non_formatted_longitude;
 static float non_formatted_time;
 static uint32_t non_formatted_date;
 
-static void set_baud_rate(L86_GNSS_BAUD_RATE baud_rate);
-static uint8_t calculate_checksum(const char *data);
 static void process_data(char *rx_buffer, uint16_t buffer_size);
 static void get_GNRMC_data(gps_data_t *gps_data_);
 static void get_GPGGA_data(gps_data_t *gps_data_);
@@ -44,12 +38,7 @@ void HAL_UART_RxHalfCpltCallback(UART_HandleTypeDef *huart)
 {
 	if(huart == huart_gnss)
 	{
-		// Disable interrupts briefly to prevent race condition
-		__disable_irq();
 		process_data(gnss_rx_buffer, BUFFER_SIZE);
-		active_buffer = 0;
-		buffer_ready_flag = 1;
-		__enable_irq();
 	}
 }
 
@@ -57,28 +46,15 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
 	if(huart == huart_gnss)
 	{
-		// Disable interrupts briefly to prevent race condition
-		__disable_irq();
 		process_data(&gnss_rx_buffer[BUFFER_SIZE], BUFFER_SIZE);
-		active_buffer = 1;
-		buffer_ready_flag = 1;
-		__enable_irq();
 	}
 }
 
 void L86_GNSS_Update(gps_data_t *gps_data_)
 {
-	// Only process if new data is available
-	if (buffer_ready_flag)
-	{
-		__disable_irq();
-		buffer_ready_flag = 0;
-		__enable_irq();
-		
-		get_GNRMC_data(gps_data_);
-		get_GPGGA_data(gps_data_);
-		format_data(gps_data_);
-	}
+	get_GNRMC_data(gps_data_);
+	get_GPGGA_data(gps_data_);
+	format_data(gps_data_);
 }
 
 void L86_GNSS_Print_Info(gps_data_t *gps_data_, UART_HandleTypeDef *huart_Seri_Port)
@@ -104,32 +80,16 @@ void L86_GNSS_Print_Info(gps_data_t *gps_data_, UART_HandleTypeDef *huart_Seri_P
 
 static void process_data(char *rx_buffer, uint16_t buffer_size)
 {
-	// Ensure null termination for string functions
 	memcpy(gps_buffer, rx_buffer, buffer_size);
-	
-	// Add null termination at the end to prevent buffer overflow
-	if (buffer_size < BUFFER_SIZE) {
-		gps_buffer[buffer_size] = '\0';
-	} else {
-		gps_buffer[BUFFER_SIZE - 1] = '\0';
-	}
 }
 
 static void get_GNRMC_data(gps_data_t *gps_data_)
 {
 	gps_GNRMC_start_point = strstr(gps_buffer, "GNRMC");
 
-	if(gps_GNRMC_start_point != NULL && (gps_GNRMC_start_point + 17) < (gps_buffer + BUFFER_SIZE))
+	if(gps_GNRMC_start_point != NULL && *(gps_GNRMC_start_point + 17) == VALID)
 	{
-		if (*(gps_GNRMC_start_point + 17) == VALID)
-		{
-			is_data_valid = 1;
-		}
-		else
-		{
-			is_data_valid = 0;
-			gps_data_->is_valid = INVALID;
-		}
+		is_data_valid = 1;
 	}
 	else
 	{
@@ -142,16 +102,12 @@ static void get_GNRMC_data(gps_data_t *gps_data_)
 		memset(current_data, 0, DATA_SIZE);
 		counter = 0;
 		current_char = gps_GNRMC_start_point;
-		
-		// Improved bounds checking
-		while(*current_char != '*' && counter < (DATA_SIZE - 1) && 
-			  current_char < (gps_buffer + BUFFER_SIZE))
+		while(*current_char != '*')
 		{
 			current_data[counter] = *current_char;
 			counter++;
 			current_char++;
 		}
-		current_data[counter] = '\0'; // Ensure null termination
 
 		sscanf(current_data, "GNRMC,%f,%c,%f,%c,%f,%c,%f,%f,%lu,,,%c",
 				&gps_data_->non_fixed_time, &gps_data_->is_valid, &gps_data_->non_fixed_latitude, &gps_data_->N_S,
@@ -166,23 +122,19 @@ static void get_GPGGA_data(gps_data_t *gps_data_)
 {
 	gps_GPGGA_start_point = strstr(gps_buffer, "GPGGA");
 
-	if(gps_GPGGA_start_point != NULL && gps_GPGGA_start_point < (gps_buffer + BUFFER_SIZE))
+	if(gps_GPGGA_start_point != NULL)
 	{
 		if(gps_data_->is_valid == VALID)
 		{
 			memset(current_data, 0, DATA_SIZE);
 			counter = 0;
 			current_char = gps_GPGGA_start_point;
-			
-			// Improved bounds checking
-			while(*(current_char) != '*' && counter < (DATA_SIZE - 1) && 
-				  current_char < (gps_buffer + BUFFER_SIZE))
+			while(*(current_char) != '*')
 			{
 				current_data[counter] = *current_char;
 				counter++;
 				current_char++;
 			}
-			current_data[counter] = '\0'; // Ensure null termination
 
 			sscanf(current_data, "GPGGA,%f,%f,%c,%f,%c,%u,%u,%f,%f,M,%f,M,,",
 					&gps_data_->non_fixed_time, &gps_data_->non_fixed_latitude, &gps_data_->N_S,
