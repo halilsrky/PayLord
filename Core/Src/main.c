@@ -100,6 +100,8 @@
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
+ADC_HandleTypeDef hadc2;
+ADC_HandleTypeDef hadc3;
 
 I2C_HandleTypeDef hi2c1;
 I2C_HandleTypeDef hi2c3;
@@ -134,7 +136,7 @@ gps_data_t gnss_data;
 // UART communication buffers
 uint8_t usart1_rx_buffer[36];
 static char uart_buffer[128];
-extern unsigned char normal_paket[38];  // Normal mode telemetry packet
+extern unsigned char normal_paket[49];  // Normal mode telemetry packet
 volatile uint8_t usart4_tx_busy = 0;       // UART4 transmission busy flag
 volatile uint8_t usart2_tx_busy = 0;       // UART2 transmission busy flag
 
@@ -189,10 +191,11 @@ static void MX_USART2_UART_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_USART6_UART_Init(void);
 static void MX_UART4_Init(void);
+static void MX_ADC2_Init(void);
+static void MX_ADC3_Init(void);
 /* USER CODE BEGIN PFP */
 static void bme280_begin();
 uint8_t bmi_imu_init(void);
-static void loraBegin();
 void read_value();
 void read_ADC(void);
 void trigger_sr_in_pulse(void);
@@ -243,6 +246,8 @@ int main(void)
   MX_ADC1_Init();
   MX_USART6_UART_Init();
   MX_UART4_Init();
+  MX_ADC2_Init();
+  MX_ADC3_Init();
   /* USER CODE BEGIN 2 */
 
 	/*==================== TIMER AND INTERRUPT CONFIGURATION ====================*/
@@ -315,16 +320,16 @@ int main(void)
 
 		  // Read magnetometer ADC values
 		  read_ADC();
-		  sensor_fusion_update_mahony(&BMI_sensor, &sensor_output);
+		  sensor_fusion_update_kalman(&BME280_sensor, &BMI_sensor, &sensor_output);
 		  flight_algorithm_update(&BME280_sensor, &BMI_sensor, &sensor_output);
 		  // Update GPS/GNSS data
 		  L86_GNSS_Update(&gnss_data);
 
 		  // Package all sensor data into telemetry packet for ground station transmission
-		  addDataPacketNormal(&BME280_sensor, &BMI_sensor, &gnss_data, hmc1021_gauss);
-
-		  uart2_send_packet_dma((uint8_t*)normal_paket, 38);
-		  lora_send_packet_dma((uint8_t*)normal_paket, 38);
+		  addDataPacketNormal(&BME280_sensor, &BMI_sensor, &gnss_data, &sensor_output, hmc1021_gauss, voltage_V, current_mA);
+		  //read_value();
+		  uart2_send_packet_dma((uint8_t*)normal_paket, 49);
+		  lora_send_packet_dma((uint8_t*)normal_paket, 49);
 		  // Update sensor readings and transmit data
 		  //read_value();
 		}
@@ -438,6 +443,110 @@ static void MX_ADC1_Init(void)
   /* USER CODE BEGIN ADC1_Init 2 */
 
   /* USER CODE END ADC1_Init 2 */
+
+}
+
+/**
+  * @brief ADC2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC2_Init(void)
+{
+
+  /* USER CODE BEGIN ADC2_Init 0 */
+
+  /* USER CODE END ADC2_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC2_Init 1 */
+
+  /* USER CODE END ADC2_Init 1 */
+
+  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
+  */
+  hadc2.Instance = ADC2;
+  hadc2.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
+  hadc2.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc2.Init.ScanConvMode = DISABLE;
+  hadc2.Init.ContinuousConvMode = DISABLE;
+  hadc2.Init.DiscontinuousConvMode = DISABLE;
+  hadc2.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc2.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc2.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc2.Init.NbrOfConversion = 1;
+  hadc2.Init.DMAContinuousRequests = DISABLE;
+  hadc2.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  if (HAL_ADC_Init(&hadc2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_10;
+  sConfig.Rank = 1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
+  if (HAL_ADC_ConfigChannel(&hadc2, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC2_Init 2 */
+
+  /* USER CODE END ADC2_Init 2 */
+
+}
+
+/**
+  * @brief ADC3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC3_Init(void)
+{
+
+  /* USER CODE BEGIN ADC3_Init 0 */
+
+  /* USER CODE END ADC3_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC3_Init 1 */
+
+  /* USER CODE END ADC3_Init 1 */
+
+  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
+  */
+  hadc3.Instance = ADC3;
+  hadc3.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
+  hadc3.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc3.Init.ScanConvMode = DISABLE;
+  hadc3.Init.ContinuousConvMode = DISABLE;
+  hadc3.Init.DiscontinuousConvMode = DISABLE;
+  hadc3.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc3.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc3.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc3.Init.NbrOfConversion = 1;
+  hadc3.Init.DMAContinuousRequests = DISABLE;
+  hadc3.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  if (HAL_ADC_Init(&hadc3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_11;
+  sConfig.Rank = 1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
+  if (HAL_ADC_ConfigChannel(&hadc3, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC3_Init 2 */
+
+  /* USER CODE END ADC3_Init 2 */
 
 }
 
@@ -780,9 +889,9 @@ uint8_t bmi_imu_init(void)
  * @note Formats and sends IMU orientation data and system parameters
  */
 void read_value(){
-  float yaw = BMI_sensor.datas.yaw;
-  float pitch = BMI_sensor.datas.pitch;
-  float roll = BMI_sensor.datas.roll;
+  float yaw = BMI_sensor.datas.gyro_x;
+  float pitch = BMI_sensor.datas.acc_x;
+  float roll = BMI_sensor.datas.delta_time;
   float yaw1 = BMI_sensor.datas.yaw1;
   float pitch1 = BMI_sensor.datas.pitch1;
   float roll1 = BMI_sensor.datas.roll1;
@@ -811,6 +920,8 @@ void read_value(){
 void read_ADC()
 {
     static uint16_t adc1_raw = 0;  // ADC1 değeri (Channel 9)
+    static uint16_t adc2_raw = 0;  // ADC1 değeri (Channel 9)
+    static uint16_t adc3_raw = 0;  // ADC1 değeri (Channel 9)
 
     // ADC1 okuma
     HAL_ADC_Start(&hadc1);
@@ -820,8 +931,26 @@ void read_ADC()
     HAL_ADC_Stop(&hadc1);
 
 
+    // ADC2 okuma
+    HAL_ADC_Start(&hadc2);
+    if (HAL_ADC_PollForConversion(&hadc2, 5) == HAL_OK) {
+        adc2_raw = HAL_ADC_GetValue(&hadc2);
+    }
+    HAL_ADC_Stop(&hadc2);
+
+
+    // ADC1 okuma
+    HAL_ADC_Start(&hadc3);
+    if (HAL_ADC_PollForConversion(&hadc1, 5) == HAL_OK) {
+        adc3_raw = HAL_ADC_GetValue(&hadc1);
+    }
+    HAL_ADC_Stop(&hadc3);
+
+
     // Kalibrasyonlu değerleri hesapla
     hmc1021_voltage = (adc1_raw * 3.3f) / 4096.0f;  // 3.3V referans, 12-bit ADC
+    voltage_V = (adc2_raw * 3.3f) / 4096.0f;  // 3.3V referans, 12-bit ADC
+    current_mA = (adc3_raw * 3.3f) / 4096.0f; // Gerekirse akım sensörüne göre kalibre edin
     hmc1021_gauss = (hmc1021_voltage - 1.65f) / 1.0f;  // 1V/Gauss sensitivity
 
 }
@@ -845,12 +974,12 @@ void trigger_sr_in_pulse(void)
  */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-  if(GPIO_Pin == GPIO_PIN_4)
+  if(GPIO_Pin == GPIO_PIN_3)
   {
     // Accelerometer data ready interrupt
     bmi088_set_accel_INT(&BMI_sensor);
   }
-  if(GPIO_Pin == GPIO_PIN_3)
+  if(GPIO_Pin == GPIO_PIN_4)
   {
     // Gyroscope data ready interrupt
     bmi088_set_gyro_INT(&BMI_sensor);

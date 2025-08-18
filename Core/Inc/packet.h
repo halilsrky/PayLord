@@ -12,6 +12,7 @@
 #include "bme280.h"
 #include "l86_gnss.h"
 #include "flight_algorithm.h"
+#include "sensor_fusion.h"
 
 
 typedef union {
@@ -23,7 +24,6 @@ typedef union {
 unsigned char check_sum_hesapla_normal(int a);
 
 
-void addDataPacketNormal(BME_280_t* BME, bmi088_struct_t* BMI, gps_data_t* GPS, float hmc1021_gauss);
-
+void addDataPacketNormal(BME_280_t* BME, bmi088_struct_t* BMI, sensor_fusion_t* sensor, gps_data_t* GPS, float hmc1021_gauss, float voltage, float current);
 
 #endif /* INC_PACKET_H_ */

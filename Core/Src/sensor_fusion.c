@@ -206,18 +206,3 @@ void sensor_fusion_update_kalman(BME_280_t* BME, bmi088_struct_t* BMI, sensor_fu
         sensor->accel_failure = accel_failure_detected;
     }
 }
-
-/**
- * @brief Update orientation using Mahony filter
- */
-void sensor_fusion_update_mahony(bmi088_struct_t* BMI, sensor_fusion_t *sensor)
-{
-	/*if(BMI->isUpdated){
-		Orientation_Update(BMI->gyro_x, BMI->gyro_y, BMI->gyro_z,BMI->acc_x, BMI->acc_y, BMI->acc_z, BMI->deltaTime);
-		sensor->angle = quaternionToTheta();
-		sensor->yaw = quaternionToYaw();
-		sensor->pitch = quaternionToPitch();
-		sensor->roll = quaternionToRoll();
-		BMI->isUpdated = 0;
-	}*/
-}

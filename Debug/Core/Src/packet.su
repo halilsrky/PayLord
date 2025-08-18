@@ -1,2 +1,2 @@
 ../Core/Src/packet.c:12:15:check_sum_hesapla_normal	24	static
-../Core/Src/packet.c:113:6:addDataPacketNormal	64	static
+../Core/Src/packet.c:21:6:addDataPacketNormal	88	static
