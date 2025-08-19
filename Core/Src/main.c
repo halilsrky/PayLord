@@ -286,11 +286,11 @@ int main(void)
 	//dwt_profiler_init();
 
 	/* ==== LORA COMMUNICATION SETUP ==== */
-    e22_chMode_config(&lora_1);
+    e22_config_mode(&lora_1);
     HAL_Delay(20);
 	lora_init();
     HAL_Delay(20);
-	e22_chMode_transmit(&lora_1);
+	e22_transmit_mode(&lora_1);
 
 	/* ==== GPS/GNSS INITIALIZATION ==== */
 	// Initialize L86 GPS/GNSS module
@@ -351,7 +351,7 @@ int main(void)
 		  
 		  // Send telemetry packet via DMA (non-blocking)
 		  //PROFILE_START(PROF_UART2_SEND);
-		  //uart2_send_packet_dma((uint8_t*)normal_paket, 49);
+		  uart2_send_packet_dma((uint8_t*)normal_paket, 49);
 		  //PROFILE_END(PROF_UART2_SEND);
 		  
 		}
@@ -889,11 +889,6 @@ void lora_init(void)
 	lora_1.wor_cycle		=	E22_WOR_CYCLE_1000;
 	lora_1.channel			=	25;
 
-	lora_1.pins.m0_pin = RF_M0_Pin;
-	lora_1.pins.m0_pin_port = RF_M0_GPIO_Port;
-	lora_1.pins.m1_pin = RF_M1_Pin;
-	lora_1.pins.m1_pin_port = RF_M1_GPIO_Port;
-
 	e22_init(&lora_1, &huart4);
 
 	HAL_UART_DeInit(&huart4);
@@ -901,6 +896,7 @@ void lora_init(void)
 	huart4.Init.BaudRate = 115200;
 	HAL_Delay(20);
 	HAL_UART_Init(&huart4);
+
 }
 
 /**
@@ -1021,18 +1017,6 @@ void read_ADC()
     current_mA = (adc3_raw * 3.3f) / 4096.0f; // Gerekirse akım sensörüne göre kalibre edin
     hmc1021_gauss = (hmc1021_voltage - 1.65f) / 1.0f;  // 1V/Gauss sensitivity
 
-}
-
-/**
- * @brief Generate SR_IN trigger pulse for HMC1021 magnetometer
- * @note Creates 1µs HIGH pulse for magnetometer set/reset calibration
- */
-void trigger_sr_in_pulse(void)
-{
-  // Set SR_IN pin HIGH (PB12)
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
-  // Set SR_IN pin LOW (PB12)
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
 }
 
 /**

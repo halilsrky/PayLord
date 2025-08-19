@@ -1,4 +1,6 @@
-../Core/Src/e22_lib.c:39:6:e22_init	24	static
-../Core/Src/e22_lib.c:72:6:e22_chMode_sleep	16	static
-../Core/Src/e22_lib.c:84:6:e22_chMode_config	16	static
-../Core/Src/e22_lib.c:96:6:e22_chMode_transmit	16	static
+../Core/Src/e22_lib.c:11:13:view_e22_response	24	static
+../Core/Src/e22_lib.c:36:6:e22_init	32	static
+../Core/Src/e22_lib.c:89:6:e22_transmit	24	static
+../Core/Src/e22_lib.c:100:6:e22_sleep_mode	16	static
+../Core/Src/e22_lib.c:108:6:e22_config_mode	16	static
+../Core/Src/e22_lib.c:115:6:e22_transmit_mode	16	static
