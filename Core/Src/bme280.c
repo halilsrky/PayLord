@@ -42,13 +42,13 @@ void bme280_getVals()
             BME->isUpdated = 1;
 
 /*            execution_count++;
-            
+
             uint32_t current_time = HAL_GetTick();
             if (current_time - last_freq_check_time >= 1000) {
                 execution_frequency = (float)execution_count / ((current_time - last_freq_check_time) / 1000.0f);
                 execution_count = 0;
                 last_freq_check_time = current_time;
-                
+
                 // Optional: Print frequency to debug UART
                 char freq_msg[50];
                 sprintf(freq_msg, "BME280 Read Freq: %.2f Hz\r\n", execution_frequency);
