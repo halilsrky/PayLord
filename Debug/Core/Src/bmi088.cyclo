@@ -1,10 +1,9 @@
 ../Core/Src/bmi088.c:112:9:bmi088_init	4
 ../Core/Src/bmi088.c:147:6:bmi088_config	14
 ../Core/Src/bmi088.c:238:6:bmi088_update	14
-../Core/Src/bmi088.c:322:6:bmi088_set_accel_INT	1
-../Core/Src/bmi088.c:327:6:bmi088_set_gyro_INT	1
-../Core/Src/bmi088.c:332:9:bmi088_getGyroChipId	1
-../Core/Src/bmi088.c:339:6:get_offset	3
-../Core/Src/bmi088.c:374:6:bmi088_accel_dma_complete_callback	1
-../Core/Src/bmi088.c:385:6:bmi088_gyro_dma_complete_callback	1
-../Core/Src/bmi088.c:396:6:bmi088_temp_dma_complete_callback	2
+../Core/Src/bmi088.c:321:6:bmi088_set_accel_INT	1
+../Core/Src/bmi088.c:326:6:bmi088_set_gyro_INT	1
+../Core/Src/bmi088.c:331:9:bmi088_getGyroChipId	1
+../Core/Src/bmi088.c:338:6:get_offset	4
+../Core/Src/bmi088.c:382:6:bmi088_accel_dma_complete_callback	1
+../Core/Src/bmi088.c:393:6:bmi088_gyro_dma_complete_callback	1

@@ -13,9 +13,9 @@
 
 //#define SELFTEST_ENABLED
 
-static uint8_t is_time_updated = 0;
-static uint8_t is_starded = 0;
-static uint8_t is_gyro_renewed = 0;
+static volatile uint8_t is_time_updated = 0;
+static volatile uint8_t is_starded = 0;
+static volatile uint8_t is_gyro_renewed = 0;
 
 static int errorLine = 0;
 
@@ -294,8 +294,7 @@ void bmi088_update(bmi088_struct_t* BMI)
 		BMI->flags.isAccelDmaComplete = 0;
 		is_time_updated = 1;
 
-		// Start temperature DMA transfer
-		HAL_I2C_Mem_Read_DMA(BMI->device_config.BMI_I2c, ACC_I2C_ADD, ACC_TEMP_MSB, I2C_MEMADD_SIZE_8BIT, BMI->datas.raw_temp_data, 2);
+		// Sıcaklık okuma kaldırıldı - sadece ivme ve gyro verisi kullanılacak
 	}
 
 	// Process gyroscope data if DMA transfer is complete
@@ -339,9 +338,18 @@ uint8_t bmi088_getGyroChipId(bmi088_struct_t* BMI)
 void get_offset(bmi088_struct_t* BMI)
 {
 	int offsetCounter = 0;
+	uint32_t timeout_start = HAL_GetTick();
+	const uint32_t TIMEOUT_MS = 10000; // 10 saniye timeout
 
 	while(1)
 	{
+		// Timeout kontrolü
+		if(HAL_GetTick() - timeout_start > TIMEOUT_MS)
+		{
+
+			return;
+		}
+		
 		bmi088_update(BMI);
 		if(is_gyro_renewed == 1)
 		{
@@ -387,21 +395,4 @@ void bmi088_gyro_dma_complete_callback(bmi088_struct_t* BMI)
 	BMI->flags.isGyroDmaComplete = 1;
 	BMI->flags.isDmaTransferActive = 0;
 	BMI->flags.isGyroUpdated = 0;
-}
-
-/**
- * @brief Temperature DMA complete callback
- * @param BMI Pointer to BMI088 structure
- */
-void bmi088_temp_dma_complete_callback(bmi088_struct_t* BMI)
-{
-	uint16_t Temp_uint11 = (BMI->datas.raw_temp_data[0] << 3) | (BMI->datas.raw_temp_data[1] >> 5);
-	int16_t Temp_int11 = 0;
-	if (Temp_uint11 > 1023){
-		Temp_int11 = Temp_uint11 - 2048;
-	}
-	else{
-		Temp_int11 = Temp_uint11;
-	}
-	BMI->datas.temp = (float)Temp_int11 * 0.125 + 23.0;
 }

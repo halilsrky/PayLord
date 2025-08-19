@@ -69,6 +69,8 @@
 #include "e22_lib.h"           // LoRa wireless communication
 #include "packet.h"          // Telemetry packet handling
 
+/* Profiling module */
+//#include "dwt_profiler.h"      // DWT performance profiler
 
 /* Algorithm and processing modules */
 #include "queternion.h"         // Quaternion mathematics
@@ -80,6 +82,7 @@
 #ifndef M_PI
 #define M_PI 3.14159265358979323846f
 #endif
+
 
 /* USER CODE END Includes */
 
@@ -193,7 +196,6 @@ static void bme280_begin();
 uint8_t bmi_imu_init(void);
 void read_value();
 void read_ADC(void);
-void trigger_sr_in_pulse(void);
 void lora_send_packet_dma(uint8_t *data, uint16_t size);
 void uart2_send_packet_dma(uint8_t *data, uint16_t size);
 void lora_init(void);                 // Initialize LoRa E22 module
@@ -274,11 +276,14 @@ int main(void)
 	bmi088_config(&BMI_sensor);
 	get_offset(&BMI_sensor);
 
-
 	/*==================== SENSOR FUSION INITIALIZATION ====================*/
 	// Initialize quaternion-based sensor fusion
 	getInitialQuaternion();
 	sensor_fusion_init(&BME280_sensor);
+
+	/*==================== DWT PROFILER INITIALIZATION ====================*/
+	// Initialize DWT profiler for performance monitoring
+	//dwt_profiler_init();
 
 	/* ==== LORA COMMUNICATION SETUP ==== */
     e22_config_mode(&lora_1);
@@ -306,29 +311,52 @@ int main(void)
     /* USER CODE BEGIN 3 */
 
 		/*CONTINUOUS SENSOR UPDATES*/
+
+		//PROFILE_START(PROF_BMI088_UPDATE);
 		bmi088_update(&BMI_sensor);		// Update IMU sensor data (accelerometer + gyroscope) - High frequency sampling
+		//PROFILE_END(PROF_BMI088_UPDATE);
+		
+		//PROFILE_START(PROF_BME280_UPDATE);
 		bme280_update(); 		// Update barometric pressure sensor data for altitude estimation
+		//PROFILE_END(PROF_BME280_UPDATE);
 
 
 		/*PERIODIC OPERATIONS (100ms)*/
-		// Execute operations every 100ms
 		if (tx_timer_flag_100ms >= 1) {
 		  tx_timer_flag_100ms = 0;
 
 		  // Read magnetometer ADC values
+		  //PROFILE_START(PROF_ADC_READ);
 		  read_ADC();
-		  sensor_fusion_update_kalman(&BME280_sensor, &BMI_sensor, &sensor_output);
-		  flight_algorithm_update(&BME280_sensor, &BMI_sensor, &sensor_output);
-		  // Update GPS/GNSS data
-		  L86_GNSS_Update(&gnss_data);
+		  //PROFILE_END(PROF_ADC_READ);
 
-		  // Package all sensor data into telemetry packet for ground station transmission
+		  // Sensor fusion and flight algorithm processing
+		  //PROFILE_START(PROF_SENSOR_FUSION);
+		  sensor_fusion_update_kalman(&BME280_sensor, &BMI_sensor, &sensor_output);
+		  //PROFILE_END(PROF_SENSOR_FUSION);
+		  
+		  //PROFILE_START(PROF_FLIGHT_ALGORITHM);
+		  flight_algorithm_update(&BME280_sensor, &BMI_sensor, &sensor_output);
+		  //PROFILE_END(PROF_FLIGHT_ALGORITHM);
+		  
+		  // Update GPS/GNSS data
+		  //PROFILE_START(PROF_GNSS_UPDATE);
+		  L86_GNSS_Update(&gnss_data);
+		  //PROFILE_END(PROF_GNSS_UPDATE);
+
+		  // Packet compose
+		  //PROFILE_START(PROF_PACKET_COMPOSE);
 		  addDataPacketNormal(&BME280_sensor, &BMI_sensor, &sensor_output, &gnss_data, hmc1021_gauss, voltage_V, current_mA);
-		  //read_value(); // Debug output - Show all quaternion values
+		  //PROFILE_END(PROF_PACKET_COMPOSE);
+		  
+		  // Send telemetry packet via DMA (non-blocking)
+		  //PROFILE_START(PROF_UART2_SEND);
 		  uart2_send_packet_dma((uint8_t*)normal_paket, 49);
+		  //PROFILE_END(PROF_UART2_SEND);
+		  
+		  //PROFILE_START(PROF_LORA_SEND);
 		  lora_send_packet_dma((uint8_t*)normal_paket, 49);
-		  // Update sensor readings and transmit data
-		  //read_value();
+		  //PROFILE_END(PROF_LORA_SEND);
 		}
 
 		/*PERIODIC OPERATIONS (1 SECOND)*/
@@ -336,9 +364,11 @@ int main(void)
 		if (tx_timer_flag_1s >= 10) {
 		  tx_timer_flag_1s = 0;
 
+		  // Output profiling results via UART2
+		  //dwt_profiler_print_results(uart2_send_packet_dma);
+
 		  // Trigger magnetometer set/reset pulse for calibration
 		  //trigger_sr_in_pulse();
-
 		}
 
   	  }
@@ -634,7 +664,7 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 8999;
+  htim2.Init.Prescaler = 8399;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim2.Init.Period = 999;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -877,10 +907,10 @@ void lora_init(void)
  */
 void bme280_begin()
 {
-  BME280_sensor.device_config.bme280_filter = BME280_FILTER_8;
+  BME280_sensor.device_config.bme280_filter = BME280_FILTER_2;
   BME280_sensor.device_config.bme280_mode = BME280_MODE_NORMAL;
-  BME280_sensor.device_config.bme280_output_speed = BME280_OS_8;
-  BME280_sensor.device_config.bme280_standby_time = BME280_STBY_20;
+  BME280_sensor.device_config.bme280_output_speed = BME280_OS_4;
+  BME280_sensor.device_config.bme280_standby_time = BME280_STBY_125;
   bme280_init(&BME280_sensor, &hi2c3);
 }
 
@@ -1056,20 +1086,16 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
  */
 void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c)
 {
-	if (hi2c->Instance == I2C1) {
-		// Check which device was being read based on device address
-		if (hi2c->Devaddress == ACC_I2C_ADD) {
-			// Accelerometer data received
-			if (hi2c->pBuffPtr == BMI_sensor.datas.raw_temp_data) {
-				bmi088_temp_dma_complete_callback(&BMI_sensor);
-			} else {
-				bmi088_accel_dma_complete_callback(&BMI_sensor);
-			}
-		} else if (hi2c->Devaddress == GYRO_I2C_ADD) {
-			// Gyroscope data received
-			bmi088_gyro_dma_complete_callback(&BMI_sensor);
-		}
-	}
+    if (hi2c->Instance == I2C1) {
+        if (hi2c->Devaddress == ACC_I2C_ADD) {
+            // Accelerometer data received (9 bytes: XYZ + sensor time)
+            bmi088_accel_dma_complete_callback(&BMI_sensor);
+        }
+        else if (hi2c->Devaddress == GYRO_I2C_ADD) {
+            // Gyroscope data received (6 bytes: XYZ)
+            bmi088_gyro_dma_complete_callback(&BMI_sensor);
+        }
+    }
 }
 
 /**

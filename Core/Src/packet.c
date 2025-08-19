@@ -11,7 +11,7 @@ unsigned char normal_paket[49];
 
 unsigned char check_sum_hesapla_normal(int a){
     int check_sum = 0;
-    for(int i = 4; i < a; i++){
+    for(int i = 0; i < a; i++){
         check_sum += normal_paket[i];
     }
     return (unsigned char) (check_sum % 256);

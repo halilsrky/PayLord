@@ -21,6 +21,11 @@ static BME_280_t*         BME;
 static uint8_t bme_started_flag = 0;
 static uint8_t last_measuring = 1;
 
+// Frequency measurement variables
+static uint32_t execution_count = 0;
+static uint32_t last_freq_check_time = 0;
+static float execution_frequency = 0.0f;
+
 
 void bme280_getVals()
 {
@@ -35,6 +40,22 @@ void bme280_getVals()
         if (retVal == HAL_OK && memcmp(data, BME->lastReadings, 8) != 0) {
             memcpy(BME->lastReadings, data, 8);
             BME->isUpdated = 1;
+
+/*            execution_count++;
+            
+            uint32_t current_time = HAL_GetTick();
+            if (current_time - last_freq_check_time >= 1000) {
+                execution_frequency = (float)execution_count / ((current_time - last_freq_check_time) / 1000.0f);
+                execution_count = 0;
+                last_freq_check_time = current_time;
+                
+                // Optional: Print frequency to debug UART
+                char freq_msg[50];
+                sprintf(freq_msg, "BME280 Read Freq: %.2f Hz\r\n", execution_frequency);
+                HAL_UART_Transmit(&huart2, (uint8_t*)freq_msg, strlen(freq_msg), 100);
+            }
+
+*/
 
             BME->adcVals.ut = ((int32_t)data[3] << 12) | ((int32_t)data[4] << 4) | ((int32_t)data[5] >> 4);
             BME->adcVals.up = ((int32_t)data[0] << 12) | ((int32_t)data[1] << 4) | ((int32_t)data[2] >> 4);
@@ -127,6 +148,13 @@ void bme280_init(BME_280_t* BME_sensor, I2C_HandleTypeDef* I2C_bme)
     BME->parameters = &bme_params;
     bme_started_flag = 0;
 
+/*
+	execution_count = 0;
+    last_freq_check_time = HAL_GetTick();
+    execution_frequency = 0.0f;
+*/
+
+
     // Check BME280 ID
     uint8_t buf[1];
     HAL_I2C_Mem_Read(I2C_, BME280_ADD, BME280_ID, I2C_MEMADD_SIZE_8BIT, buf, 1, 50);
@@ -217,5 +245,10 @@ float bme280_get_temperature() {
 
 float bme280_get_humidity() {
     return BME->humidity;
+}
+
+// Function to get the current execution frequency
+float bme280_get_execution_frequency() {
+    return execution_frequency;
 }
 

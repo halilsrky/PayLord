@@ -114,4 +114,7 @@ float bme280_get_temperature();
 float bme280_get_humidity();
 uint32_t bme280_get_timestamp();
 
+// Function to get BME280 data read frequency
+float bme280_get_execution_frequency();
+
 #endif /* INC_BME280_H_ */
