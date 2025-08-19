@@ -70,7 +70,7 @@
 #include "packet.h"          // Telemetry packet handling
 
 /* Profiling module */
-//#include "dwt_profiler.h"      // DWT performance profiler
+#include "dwt_profiler.h"      // DWT performance profiler
 
 /* Algorithm and processing modules */
 #include "queternion.h"         // Quaternion mathematics
@@ -283,7 +283,7 @@ int main(void)
 
 	/*==================== DWT PROFILER INITIALIZATION ====================*/
 	// Initialize DWT profiler for performance monitoring
-	//dwt_profiler_init();
+	dwt_profiler_init();
 
 	/* ==== LORA COMMUNICATION SETUP ==== */
     e22_config_mode(&lora_1);
@@ -312,13 +312,13 @@ int main(void)
 
 		/*CONTINUOUS SENSOR UPDATES*/
 
-		//PROFILE_START(PROF_BMI088_UPDATE);
+		PROFILE_START(PROF_BMI088_UPDATE);
 		bmi088_update(&BMI_sensor);		// Update IMU sensor data (accelerometer + gyroscope) - High frequency sampling
-		//PROFILE_END(PROF_BMI088_UPDATE);
+		PROFILE_END(PROF_BMI088_UPDATE);
 		
-		//PROFILE_START(PROF_BME280_UPDATE);
+		PROFILE_START(PROF_BME280_UPDATE);
 		bme280_update(); 		// Update barometric pressure sensor data for altitude estimation
-		//PROFILE_END(PROF_BME280_UPDATE);
+		PROFILE_END(PROF_BME280_UPDATE);
 
 
 		/*PERIODIC OPERATIONS (100ms)*/
@@ -326,37 +326,37 @@ int main(void)
 		  tx_timer_flag_100ms = 0;
 
 		  // Read magnetometer ADC values
-		  //PROFILE_START(PROF_ADC_READ);
+		  PROFILE_START(PROF_ADC_READ);
 		  read_ADC();
-		  //PROFILE_END(PROF_ADC_READ);
+		  PROFILE_END(PROF_ADC_READ);
 
 		  // Sensor fusion and flight algorithm processing
-		  //PROFILE_START(PROF_SENSOR_FUSION);
+		  PROFILE_START(PROF_SENSOR_FUSION);
 		  sensor_fusion_update_kalman(&BME280_sensor, &BMI_sensor, &sensor_output);
-		  //PROFILE_END(PROF_SENSOR_FUSION);
+		  PROFILE_END(PROF_SENSOR_FUSION);
 		  
-		  //PROFILE_START(PROF_FLIGHT_ALGORITHM);
+		  PROFILE_START(PROF_FLIGHT_ALGORITHM);
 		  flight_algorithm_update(&BME280_sensor, &BMI_sensor, &sensor_output);
-		  //PROFILE_END(PROF_FLIGHT_ALGORITHM);
+		  PROFILE_END(PROF_FLIGHT_ALGORITHM);
 		  
 		  // Update GPS/GNSS data
-		  //PROFILE_START(PROF_GNSS_UPDATE);
+		  PROFILE_START(PROF_GNSS_UPDATE);
 		  L86_GNSS_Update(&gnss_data);
-		  //PROFILE_END(PROF_GNSS_UPDATE);
+		  PROFILE_END(PROF_GNSS_UPDATE);
 
 		  // Packet compose
-		  //PROFILE_START(PROF_PACKET_COMPOSE);
+		  PROFILE_START(PROF_PACKET_COMPOSE);
 		  addDataPacketNormal(&BME280_sensor, &BMI_sensor, &sensor_output, &gnss_data, hmc1021_gauss, voltage_V, current_mA);
-		  //PROFILE_END(PROF_PACKET_COMPOSE);
+		  PROFILE_END(PROF_PACKET_COMPOSE);
 		  
 		  // Send telemetry packet via DMA (non-blocking)
-		  //PROFILE_START(PROF_UART2_SEND);
+		  PROFILE_START(PROF_UART2_SEND);
 		  uart2_send_packet_dma((uint8_t*)normal_paket, 49);
-		  //PROFILE_END(PROF_UART2_SEND);
+		  PROFILE_END(PROF_UART2_SEND);
 		  
-		  //PROFILE_START(PROF_LORA_SEND);
+		  PROFILE_START(PROF_LORA_SEND);
 		  lora_send_packet_dma((uint8_t*)normal_paket, 49);
-		  //PROFILE_END(PROF_LORA_SEND);
+		  PROFILE_END(PROF_LORA_SEND);
 		}
 
 		/*PERIODIC OPERATIONS (1 SECOND)*/
@@ -1007,8 +1007,8 @@ void read_ADC()
 
     // ADC1 okuma
     HAL_ADC_Start(&hadc3);
-    if (HAL_ADC_PollForConversion(&hadc1, 5) == HAL_OK) {
-        adc3_raw = HAL_ADC_GetValue(&hadc1);
+    if (HAL_ADC_PollForConversion(&hadc3, 5) == HAL_OK) {
+        adc3_raw = HAL_ADC_GetValue(&hadc3);
     }
     HAL_ADC_Stop(&hadc3);
 
