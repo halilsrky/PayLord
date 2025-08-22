@@ -134,7 +134,7 @@ static e22_conf_struct_t lora_1;
 // UART communication buffers
 uint8_t usart1_rx_buffer[36];
 static char uart_buffer[128];
-extern unsigned char normal_paket[49];  // Normal mode telemetry packet
+extern unsigned char normal_paket[50];  // Normal mode telemetry packet
 volatile uint8_t usart4_tx_busy = 0;       // UART4 transmission busy flag
 volatile uint8_t usart2_tx_busy = 0;       // UART2 transmission busy flag
 
@@ -351,7 +351,7 @@ int main(void)
 		  
 		  // Send telemetry packet via DMA (non-blocking)
 		  //PROFILE_START(PROF_UART2_SEND);
-		  uart2_send_packet_dma((uint8_t*)normal_paket, 49);
+		  uart2_send_packet_dma((uint8_t*)normal_paket, 50);
 		  //PROFILE_END(PROF_UART2_SEND);
 		  
 		}
@@ -362,7 +362,7 @@ int main(void)
 		  tx_timer_flag_1s = 0;
 
 		  //PROFILE_START(PROF_LORA_SEND);
-		  lora_send_packet_dma((uint8_t*)normal_paket, 49);
+		  //lora_send_packet_dma((uint8_t*)normal_paket, 49);
 		  //PROFILE_END(PROF_LORA_SEND);
 
 		  // Output profiling results via UART2
@@ -460,7 +460,7 @@ static void MX_ADC1_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_9;
   sConfig.Rank = 1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
+  sConfig.SamplingTime = ADC_SAMPLETIME_15CYCLES;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -512,7 +512,7 @@ static void MX_ADC2_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_10;
   sConfig.Rank = 1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
+  sConfig.SamplingTime = ADC_SAMPLETIME_15CYCLES;
   if (HAL_ADC_ConfigChannel(&hadc2, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -564,7 +564,7 @@ static void MX_ADC3_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_11;
   sConfig.Rank = 1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
+  sConfig.SamplingTime = ADC_SAMPLETIME_15CYCLES;
   if (HAL_ADC_ConfigChannel(&hadc3, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -984,8 +984,8 @@ void read_value(){
 void read_ADC()
 {
     static uint16_t adc1_raw = 0;  // ADC1 değeri (Channel 9)
-    static uint16_t adc2_raw = 0;  // ADC1 değeri (Channel 9)
-    static uint16_t adc3_raw = 0;  // ADC1 değeri (Channel 9)
+    static uint16_t adc2_raw = 0;  // ADC2 değeri (Channel 10)
+    static uint16_t adc3_raw = 0;  // ADC3 değeri (Channel 11)
 
     // ADC1 okuma
     HAL_ADC_Start(&hadc1);
@@ -1003,7 +1003,7 @@ void read_ADC()
     HAL_ADC_Stop(&hadc2);
 
 
-    // ADC1 okuma
+    // ADC3 okuma
     HAL_ADC_Start(&hadc3);
     if (HAL_ADC_PollForConversion(&hadc3, 5) == HAL_OK) {
         adc3_raw = HAL_ADC_GetValue(&hadc3);
