@@ -68,6 +68,10 @@
 /* Communication modules */
 #include "e22_lib.h"           // LoRa wireless communication
 #include "packet.h"          // Telemetry packet handling
+#include "data_logger.h"
+
+/* FATFS File System */
+#include "fatfs.h"             // FATFS file system
 
 /* Profiling module */
 //#include "dwt_profiler.h"      // DWT performance profiler
@@ -109,6 +113,8 @@ ADC_HandleTypeDef hadc3;
 I2C_HandleTypeDef hi2c1;
 I2C_HandleTypeDef hi2c3;
 DMA_HandleTypeDef hdma_i2c1_rx;
+
+SPI_HandleTypeDef hspi1;
 
 TIM_HandleTypeDef htim2;
 
@@ -191,6 +197,7 @@ static void MX_USART6_UART_Init(void);
 static void MX_UART4_Init(void);
 static void MX_ADC2_Init(void);
 static void MX_ADC3_Init(void);
+static void MX_SPI1_Init(void);
 /* USER CODE BEGIN PFP */
 static void bme280_begin();
 uint8_t bmi_imu_init(void);
@@ -246,6 +253,8 @@ int main(void)
   MX_UART4_Init();
   MX_ADC2_Init();
   MX_ADC3_Init();
+  MX_SPI1_Init();
+  MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
 
 	/*==================== TIMER AND INTERRUPT CONFIGURATION ====================*/
@@ -354,6 +363,9 @@ int main(void)
 		  uart2_send_packet_dma((uint8_t*)normal_paket, 50);
 		  //PROFILE_END(PROF_UART2_SEND);
 		  
+		  log_normal_packet_data(normal_paket);
+
+
 		}
 
 		/*PERIODIC OPERATIONS (1 SECOND)*/
@@ -644,6 +656,44 @@ static void MX_I2C3_Init(void)
 }
 
 /**
+  * @brief SPI1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_SPI1_Init(void)
+{
+
+  /* USER CODE BEGIN SPI1_Init 0 */
+
+  /* USER CODE END SPI1_Init 0 */
+
+  /* USER CODE BEGIN SPI1_Init 1 */
+
+  /* USER CODE END SPI1_Init 1 */
+  /* SPI1 parameter configuration*/
+  hspi1.Instance = SPI1;
+  hspi1.Init.Mode = SPI_MODE_MASTER;
+  hspi1.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi1.Init.NSS = SPI_NSS_SOFT;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi1.Init.CRCPolynomial = 10;
+  if (HAL_SPI_Init(&hspi1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN SPI1_Init 2 */
+
+  /* USER CODE END SPI1_Init 2 */
+
+}
+
+/**
   * @brief TIM2 Initialization Function
   * @param None
   * @retval None
@@ -834,6 +884,9 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOC, RF_M0_Pin|RF_M1_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(SD_CS_GPIO_Port, SD_CS_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : RF_M0_Pin RF_M1_Pin */
@@ -842,6 +895,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : SD_CS_Pin */
+  GPIO_InitStruct.Pin = SD_CS_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(SD_CS_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PB12 */
   GPIO_InitStruct.Pin = GPIO_PIN_12;
