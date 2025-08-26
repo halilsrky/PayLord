@@ -48,6 +48,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "fatfs.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -1075,7 +1076,7 @@ void read_ADC()
 
     // Kalibrasyonlu değerleri hesapla
     hmc1021_voltage = (adc1_raw * 3.3f) / 4096.0f;  // 3.3V referans, 12-bit ADC
-    voltage_V = (adc2_raw * 3.3f) / 4096.0f;  // 3.3V referans, 12-bit ADC
+    voltage_V = (adc2_raw * 13.2f) / 4096.0f;  // 3.3V referans, 12-bit ADC
     current_mA = (adc3_raw * 3.3f) / 4096.0f; // Gerekirse akım sensörüne göre kalibre edin
     hmc1021_gauss = (hmc1021_voltage - 1.65f) / 1.0f;  // 1V/Gauss sensitivity
 

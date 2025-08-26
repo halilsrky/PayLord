@@ -13,6 +13,5 @@ void log_datas(float altitude, float lat, float lon, float time, float altitude_
 void log_normal_packet_data(unsigned char* packet_data);
 void flush_packet_buffer(void);
 void force_flush_buffer(void);
-uint8_t is_sd_card_ready(void);
 
 #endif /* INC_DATA_LOGGER_H_ */

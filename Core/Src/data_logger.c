@@ -17,7 +17,6 @@
 
 static uint8_t packet_buffer[BUFFER_SIZE];
 static uint16_t buffer_index = 0;
-static uint8_t file_opened = 0;
 
 FATFS FatFs; 	//Fatfs handle
 FIL fil; 		//File handle
@@ -34,36 +33,14 @@ void data_logger_init()
 		return;
 	}
 	
-	// tracker.csv için başlık oluştur
-	fres = f_open(&fil, "tracker.csv", FA_WRITE | FA_OPEN_ALWAYS);
-	if (fres == FR_OK) {
-		f_lseek(&fil, f_size(&fil));
-		unsigned int file_res = 0;
-		uint8_t p_data[300];
-		sprintf((char*) p_data, (char*)"Time,Altitude (m),Lat,Lon,Altitude pressure (m),Temperature (C),Humidity (%%)\n");
-		f_write(&fil, (uint8_t*) p_data, strlen((char*)p_data), &file_res);
-		f_close(&fil);
-	}
-	
-	// packet_data.bin dosyasını oluştur (eğer yoksa)
-	fres = f_open(&fil, "packet_data.bin", FA_WRITE | FA_OPEN_ALWAYS);
+	// packets.bin dosyasını oluştur (eğer yoksa)
+	fres = f_open(&fil, "packets.bin", FA_WRITE | FA_OPEN_ALWAYS);
 	if (fres == FR_OK) {
 		f_close(&fil);
 	}
 	
 	// Buffer'ı sıfırla
 	buffer_index = 0;
-}
-
-void log_datas(float altitude, float lat, float lon, float time, float altitude_pressure, float temperature, float humidity)
-{
-	fres = f_open(&fil, "tracker.csv", FA_WRITE | FA_OPEN_ALWAYS);
-	f_lseek(&fil, f_size(&fil));
-	unsigned int file_res = 0;
-	uint8_t p_data[300];
-	sprintf((char*) p_data, (char*)"%.0f,%.2f,%.6f,%.6f,%.2f,%.2f,%.2f\n", time, altitude, lat, lon,  altitude_pressure, temperature, humidity);
-	f_write(&fil, (uint8_t*) p_data, strlen((char*)p_data), &file_res);
-	f_close(&fil);
 }
 
 void log_normal_packet_data(unsigned char* packet_data)
@@ -82,7 +59,7 @@ void log_normal_packet_data(unsigned char* packet_data)
 void flush_packet_buffer(void)
 {
 	if (buffer_index > 0) {
-		fres = f_open(&fil, "packet_data.bin", FA_WRITE | FA_OPEN_ALWAYS);
+		fres = f_open(&fil, "packets.bin", FA_WRITE | FA_OPEN_ALWAYS);
 		if (fres == FR_OK) {
 			f_lseek(&fil, f_size(&fil));
 			unsigned int file_res = 0;
@@ -101,16 +78,4 @@ void flush_packet_buffer(void)
 void force_flush_buffer(void)
 {
 	flush_packet_buffer();
-}
-
-// SD kart hazır mı kontrol et
-uint8_t is_sd_card_ready(void)
-{
-	FRESULT test_result = f_open(&fil, "test.tmp", FA_WRITE | FA_CREATE_ALWAYS);
-	if (test_result == FR_OK) {
-		f_close(&fil);
-		f_unlink("test.tmp"); // Test dosyasını sil
-		return 1; // SD kart hazır
-	}
-	return 0; // SD kart hazır değil
 }
