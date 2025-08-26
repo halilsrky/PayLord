@@ -27,16 +27,32 @@ FRESULT fres; 	//Result after operations
 
 void data_logger_init()
 {
+	// SD kartı mount et
 	fres = f_mount(&FatFs, "", 1);
+	if (fres != FR_OK) {
+		// Mount başarısız - hata işleme
+		return;
+	}
 	
-	// tracker.csv için başlık
+	// tracker.csv için başlık oluştur
 	fres = f_open(&fil, "tracker.csv", FA_WRITE | FA_OPEN_ALWAYS);
-	f_lseek(&fil, f_size(&fil));
-	unsigned int file_res = 0;
-	uint8_t p_data[300];
-	sprintf((char*) p_data, (char*)"Time,Altitude (m),Lat,Lon,Altitude pressure (m),Temperature (C),Humidity (%%)\n");
-	f_write(&fil, (uint8_t*) p_data, strlen((char*)p_data), &file_res);
-	f_close(&fil);
+	if (fres == FR_OK) {
+		f_lseek(&fil, f_size(&fil));
+		unsigned int file_res = 0;
+		uint8_t p_data[300];
+		sprintf((char*) p_data, (char*)"Time,Altitude (m),Lat,Lon,Altitude pressure (m),Temperature (C),Humidity (%%)\n");
+		f_write(&fil, (uint8_t*) p_data, strlen((char*)p_data), &file_res);
+		f_close(&fil);
+	}
+	
+	// packet_data.bin dosyasını oluştur (eğer yoksa)
+	fres = f_open(&fil, "packet_data.bin", FA_WRITE | FA_OPEN_ALWAYS);
+	if (fres == FR_OK) {
+		f_close(&fil);
+	}
+	
+	// Buffer'ı sıfırla
+	buffer_index = 0;
 }
 
 void log_datas(float altitude, float lat, float lon, float time, float altitude_pressure, float temperature, float humidity)
@@ -85,4 +101,16 @@ void flush_packet_buffer(void)
 void force_flush_buffer(void)
 {
 	flush_packet_buffer();
+}
+
+// SD kart hazır mı kontrol et
+uint8_t is_sd_card_ready(void)
+{
+	FRESULT test_result = f_open(&fil, "test.tmp", FA_WRITE | FA_CREATE_ALWAYS);
+	if (test_result == FR_OK) {
+		f_close(&fil);
+		f_unlink("test.tmp"); // Test dosyasını sil
+		return 1; // SD kart hazır
+	}
+	return 0; // SD kart hazır değil
 }

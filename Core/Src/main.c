@@ -309,6 +309,8 @@ int main(void)
     HAL_UART_Init(&huart6);
 	HAL_DMA_Init(&hdma_usart6_rx);
 	L86_GNSS_Init(&huart6);
+
+	data_logger_init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
