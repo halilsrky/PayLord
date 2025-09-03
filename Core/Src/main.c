@@ -55,6 +55,7 @@
 
 /* Project configuration */
 #include "configuration.h"
+#include "w25_flash_memory.h"
 
 /* Standard library includes */
 #include <string.h>
@@ -104,6 +105,8 @@
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
 #define IMU_I2C_HNDLR	hi2c1 //put your I2C handler
+
+#define CRNT_COEF					(float)0.0008056641	// Current coefficient (A)
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -116,6 +119,7 @@ I2C_HandleTypeDef hi2c3;
 DMA_HandleTypeDef hdma_i2c1_rx;
 
 SPI_HandleTypeDef hspi1;
+SPI_HandleTypeDef hspi3;
 
 TIM_HandleTypeDef htim2;
 
@@ -142,6 +146,8 @@ static e22_conf_struct_t lora_1;
 uint8_t usart1_rx_buffer[36];
 static char uart_buffer[128];
 extern unsigned char normal_paket[50];  // Normal mode telemetry packet
+extern unsigned char sd_paket[64];  // Normal mode telemetry packet
+
 volatile uint8_t usart4_tx_busy = 0;       // UART4 transmission busy flag
 volatile uint8_t usart2_tx_busy = 0;       // UART2 transmission busy flag
 
@@ -168,6 +174,8 @@ int bmi_status_ok = 0;
 uint32_t lastUpdate = 0;
 
 // External configuration variables
+extern volatile uint8_t tx_timer_flag_w25q;
+extern uint8_t sector_erase_started;
 extern uint8_t Gain;
 extern uint8_t gyroOnlyMode;
 
@@ -199,6 +207,7 @@ static void MX_UART4_Init(void);
 static void MX_ADC2_Init(void);
 static void MX_ADC3_Init(void);
 static void MX_SPI1_Init(void);
+static void MX_SPI3_Init(void);
 /* USER CODE BEGIN PFP */
 static void bme280_begin();
 uint8_t bmi_imu_init(void);
@@ -256,6 +265,7 @@ int main(void)
   MX_ADC3_Init();
   MX_SPI1_Init();
   MX_FATFS_Init();
+  MX_SPI3_Init();
   /* USER CODE BEGIN 2 */
 
 	/*==================== TIMER AND INTERRUPT CONFIGURATION ====================*/
@@ -312,6 +322,11 @@ int main(void)
 	L86_GNSS_Init(&huart6);
 
 	data_logger_init();
+	W25Q_Init(&hspi3);
+
+    HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, SET);
+    HAL_Delay(300);
+    HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, RESET);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -337,6 +352,8 @@ int main(void)
 		if (tx_timer_flag_100ms >= 1) {
 		  tx_timer_flag_100ms = 0;
 
+
+
 		  // Read magnetometer ADC values
 		  //PROFILE_START(PROF_ADC_READ);
 		  read_ADC();
@@ -361,27 +378,34 @@ int main(void)
 		  addDataPacketNormal(&BME280_sensor, &BMI_sensor, &sensor_output, &gnss_data, hmc1021_gauss, voltage_V, current_mA);
 		  //PROFILE_END(PROF_PACKET_COMPOSE);
 		  
-		  // Send telemetry packet via DMA (non-blocking)
-		  //PROFILE_START(PROF_UART2_SEND);
+		  addDataPacketSD(&BME280_sensor, &BMI_sensor, &sensor_output, &gnss_data, hmc1021_gauss, voltage_V, current_mA);
+
+		  //PROFILE_START(PROF_SD_LOGGER);
+		  log_normal_packet_data(sd_paket);
+		  //PROFILE_END(PROF_SD_LOGGER);
+
+		  W25Q_WriteToBufferFlushOnSectorFull(sd_paket);
+
+		  //Send telemetry packet via DMA (non-blocking)
+		  //7PROFILE_START(PROF_UART2_SEND);
 		  uart2_send_packet_dma((uint8_t*)normal_paket, 50);
 		  //PROFILE_END(PROF_UART2_SEND);
 		  
-		  log_normal_packet_data(normal_paket);
-
+		  // Output profiling results via UART2
+		  //dwt_profiler_print_compact(uart2_send_packet_dma);
 
 		}
 
 		/*PERIODIC OPERATIONS (1 SECOND)*/
 		// Execute operations every 1 second (10 * 100ms)
-		if (tx_timer_flag_1s >= 10) {
+		if (tx_timer_flag_1s >= 2) {
 		  tx_timer_flag_1s = 0;
 
 		  //PROFILE_START(PROF_LORA_SEND);
-		  //lora_send_packet_dma((uint8_t*)normal_paket, 49);
+		  lora_send_packet_dma((uint8_t*)normal_paket, 50);
 		  //PROFILE_END(PROF_LORA_SEND);
 
-		  // Output profiling results via UART2
-		  //dwt_profiler_print_results(uart2_send_packet_dma);
+
 		}
 
   	  }
@@ -697,6 +721,44 @@ static void MX_SPI1_Init(void)
 }
 
 /**
+  * @brief SPI3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_SPI3_Init(void)
+{
+
+  /* USER CODE BEGIN SPI3_Init 0 */
+
+  /* USER CODE END SPI3_Init 0 */
+
+  /* USER CODE BEGIN SPI3_Init 1 */
+
+  /* USER CODE END SPI3_Init 1 */
+  /* SPI3 parameter configuration*/
+  hspi3.Instance = SPI3;
+  hspi3.Init.Mode = SPI_MODE_MASTER;
+  hspi3.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi3.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi3.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi3.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi3.Init.NSS = SPI_NSS_SOFT;
+  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi3.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi3.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi3.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi3.Init.CRCPolynomial = 10;
+  if (HAL_SPI_Init(&hspi3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN SPI3_Init 2 */
+
+  /* USER CODE END SPI3_Init 2 */
+
+}
+
+/**
   * @brief TIM2 Initialization Function
   * @param None
   * @retval None
@@ -887,10 +949,10 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOC, RF_M0_Pin|RF_M1_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(SD_CS_GPIO_Port, SD_CS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, SD_CS_Pin|W25_FLASH_CS_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12|BUZZER_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : RF_M0_Pin RF_M1_Pin */
   GPIO_InitStruct.Pin = RF_M0_Pin|RF_M1_Pin;
@@ -899,12 +961,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : SD_CS_Pin */
-  GPIO_InitStruct.Pin = SD_CS_Pin;
+  /*Configure GPIO pins : SD_CS_Pin W25_FLASH_CS_Pin */
+  GPIO_InitStruct.Pin = SD_CS_Pin|W25_FLASH_CS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(SD_CS_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PB12 */
   GPIO_InitStruct.Pin = GPIO_PIN_12;
@@ -912,6 +974,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : BUZZER_Pin */
+  GPIO_InitStruct.Pin = BUZZER_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(BUZZER_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PB3 PB4 */
   GPIO_InitStruct.Pin = GPIO_PIN_3|GPIO_PIN_4;
@@ -950,7 +1019,7 @@ void lora_init(void)
 	lora_1.lbt				=	E22_LBT_DISABLE;
 	lora_1.wor				=	E22_WOR_RECEIVER;
 	lora_1.wor_cycle		=	E22_WOR_CYCLE_1000;
-	lora_1.channel			=	25;
+	lora_1.channel			=	28;
 
 	e22_init(&lora_1, &huart4);
 
@@ -1077,9 +1146,15 @@ void read_ADC()
     // Kalibrasyonlu değerleri hesapla
     hmc1021_voltage = (adc1_raw * 3.3f) / 4096.0f;  // 3.3V referans, 12-bit ADC
     voltage_V = (adc2_raw * 13.2f) / 4096.0f;  // 3.3V referans, 12-bit ADC
-    current_mA = (adc3_raw * 3.3f) / 4096.0f; // Gerekirse akım sensörüne göre kalibre edin
+    current_mA = (adc3_raw * CRNT_COEF); // Gerekirse akım sensörüne göre kalibre edin
     hmc1021_gauss = (hmc1021_voltage - 1.65f) / 1.0f;  // 1V/Gauss sensitivity
 
+	if(voltage_V < 7.0){
+		e22_sleep_mode(&lora_1);
+
+	}else if(voltage_V >= 7.0){
+		e22_transmit_mode(&lora_1);
+	}
 }
 
 /**

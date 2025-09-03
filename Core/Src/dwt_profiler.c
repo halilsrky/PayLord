@@ -45,6 +45,7 @@ static const char* default_names[PROF_MAX_COUNT] = {
     "PACKET",
     "UART2",
     "LORA",
+	"LOGGER",
     "MAIN_LOOP"
 };
 

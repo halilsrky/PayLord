@@ -21,7 +21,7 @@ extern int is_BME_ok;
 static FlightPhase_t current_phase = PHASE_IDLE;
 
 // Flight parameters (configurable)
-static float launch_accel_threshold = 15.0f;  // m/s²
+static float launch_accel_threshold = 25.0f;  // m/s²
 static float min_arming_altitude = 1800.0f;   // meters
 static float main_chute_altitude = 500.0f;    // meters
 static float max_angle_threshold = 70.0f;     // degrees

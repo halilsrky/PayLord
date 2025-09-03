@@ -1,21 +1,24 @@
 /**
  * @file sensor_fusion.c
  * @brief Sensor fusion implementation that uses external Kalman filter
- * @date 2025-07-05 13:48:29
+ * @date 2025-07-05
  * @author halilsrky
  */
-
 #include "sensor_fusion.h"
 #include "kalman.h"
 #include "queternion.h"
 #include "quaternion.h"
-#include "flight_algorithm.h"  // Flight algorithm için include ekledik
+#include "flight_algorithm.h"
 #include <math.h>
+
+// M_PI tanımı yoksa tanımla
+#ifndef M_PI
+#define M_PI 3.14159265358979323846f
+#endif
 
 /* Private variables */
 static KalmanFilter_t kalman;          // Kalman filter instance from kalman.h
 static uint8_t initialized = 0;        // Flag to track initialization
-static float reference_altitude = 0.0f; // Base reference altitude
 static uint32_t last_kalman_update_time = 0;  // Timestamp of last Kalman update
 static uint32_t flight_start_time = 0;  // Timestamp when flight began (from flight algorithm)
 
@@ -32,9 +35,6 @@ static uint8_t accel_failure_detected = 0;    // Arıza tespit edildi mi?
 #define ACCEL_MAX_STD_THRUST 50.0f      // İtki fazında max std sapma
 #define ACCEL_MAX_VALUE_CRUISE 50.0f    // Seyir fazında max ivme
 #define ACCEL_MAX_STD_CRUISE 15.0f      // Seyir fazında max std sapma
-
-/* External variables from main */
-extern uint8_t tx_timer_flag;  // Timer flag that is set every 100ms
 
 /**
  * @brief İvme değerlerinin standart sapmasını hesapla
@@ -124,15 +124,14 @@ static uint8_t detect_accel_failure(float accel)
 /**
  * @brief Initialize the sensor fusion module
  */
-void sensor_fusion_init(BME_280_t* BME)
+void sensor_fusion_init()
 {
+    // Sensörlerinize göre gürültü değerlerini ayarlayın - daha konservatif başlangıç
+    kalman.process_noise = 0.05f;         // Model gürültüsü (biraz artırıldı)
+    kalman.measurement_noise_alt = 0.1f;  // BME280 yükseklik gürültüsü (daha realistik)
+    kalman.measurement_noise_acc = 10.0f; // BMI088 ivme gürültüsü (başlangıç için)
+
     KalmanFilter_Init(&kalman);
-
-    // Sensörlerinize göre gürültü değerlerini ayarlayın
-    kalman.process_noise = 0.1f;         // Model gürültüsü
-    kalman.measurement_noise_alt = 0.005f;  // BME280 yükseklik gürültüsü
-    kalman.measurement_noise_acc = 5.0f;  // BMI088 ivme gürültüsü
-
 
     // İvme arıza tespit değişkenlerini sıfırla
     for (int i = 0; i < ACCEL_BUFFER_SIZE; i++) {
@@ -143,8 +142,7 @@ void sensor_fusion_init(BME_280_t* BME)
     accel_failure_detected = 0;
 
     initialized = 1;
-    reference_altitude = BME->base_altitude;
-    last_kalman_update_time = HAL_GetTick();
+    last_kalman_update_time = 0;  // Sıfırla ki ilk çalıştırmada düzgün başlasın
     flight_start_time = 0;
 }
 
@@ -157,23 +155,36 @@ void sensor_fusion_update_kalman(BME_280_t* BME, bmi088_struct_t* BMI, sensor_fu
     uint32_t current_time = HAL_GetTick();
 
     // Calculate time difference in seconds
-    float time_sec = (current_time - last_kalman_update_time) / 1000.0f;
+    float time_sec;
+
+    // İlk çalıştırmada zamanı başlat
+    if (last_kalman_update_time == 0) {
+        last_kalman_update_time = current_time;
+        time_sec = 0.01f; // İlk iterasyon için sabit değer
+    } else {
+        // Zaman farkını hesapla
+        uint32_t time_diff = current_time - last_kalman_update_time;
+        time_sec = time_diff / 1000.0f;
+
+        // Zaman kontrolü - makul sınırlar içinde olmalı
+        if (time_sec <= 0.0f || time_sec > 1.0f) {
+            time_sec = 0.01f; // Default 10ms if invalid
+        }
+    }
 
     // Update the last update time
     last_kalman_update_time = current_time;
 
-    float altitude = BME->altitude;
-
-    // Ensure time is valid (never zero or negative)
-    if (time_sec <= 0.001f) {
-        time_sec = 0.01f; // Use default time step if invalid
+    // Güvenlik kontrolü - BME ve BMI sensör verilerinin geçerli olduğundan emin ol
+    if (BME == NULL || BMI == NULL || sensor == NULL) {
+        return;
     }
 
     // Calculate vertical acceleration by compensating for gravity using IMU orientation
     float angle_rad = BMI->datas.theta * (M_PI / 180.0f);  // dereceyse radyana çevir
 
     // Yerçekimi ivmesinin lokal z eksenindeki bileşeni
-    float g_local_z = 9.81f * cos(angle_rad);
+    float g_local_z = 9.81f * cosf(angle_rad);
 
     // Gerçek ivmeyi hesapla:
     float accel_z_corrected = BMI->datas.acc_z - g_local_z;
@@ -181,28 +192,26 @@ void sensor_fusion_update_kalman(BME_280_t* BME, bmi088_struct_t* BMI, sensor_fu
     // İvme sensörü arıza tespiti
     accel_failure_detected = detect_accel_failure(accel_z_corrected);
 
+    // İvme değeri kontrolü - aşırı değerleri sınırla
+    if (fabsf(accel_z_corrected) > 500.0f) {
+        accel_z_corrected = (accel_z_corrected > 0) ? 500.0f : -500.0f;
+    }
+
     // Arıza durumuna göre Kalman filtresi parametrelerini güncelle
     if (accel_failure_detected) {
         // Arıza tespit edildi - ivme sensörüne çok az güven
-        kalman.measurement_noise_acc = 50.0f;
+        kalman.measurement_noise_acc = 500.0f;  // Çok yüksek gürültü = düşük güven
     } else {
         // Normal durum - normal güven
-        kalman.measurement_noise_acc = 0.3f;
+        kalman.measurement_noise_acc = 50.0f;
     }
 
     // Only update if initialized
     if (initialized) {
-        sensor->filtered_altitude = KalmanFilter_Update(&kalman, altitude, accel_z_corrected, time_sec);
+        // HATA DÜZELTİLDİ: accel_failure_detected yerine gerçek ivme değeri kullanılıyor
+        sensor->filtered_altitude = KalmanFilter_Update(&kalman, BME->altitude, accel_z_corrected, time_sec);
         sensor->apogeeDetect = KalmanFilter_IsApogeeDetected(&kalman);
         sensor->velocity = Kalman_Get_Velocity(&kalman);
-        // Store velocity estimate for later use
-     /*   static float prev_altitude = 0.0f;
-        if (time_sec > 0.001f) {
-            sensor->velocity = (sensor->filtered_altitude - prev_altitude) / time_sec;
-        }
-        prev_altitude = sensor->filtered_altitude;*/
-
-        // Arıza durumunu sensor yapısına ekleyelim (telemetri için kullanılabilir)
         sensor->accel_failure = accel_failure_detected;
     }
 }

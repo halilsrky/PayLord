@@ -1,0 +1,16 @@
+../Core/Src/w25_flash_memory.c:35:6:W25Q_Init	16	static
+../Core/Src/w25_flash_memory.c:41:6:W25Q_Reset	16	static
+../Core/Src/w25_flash_memory.c:54:6:W25Q_Read	32	static
+../Core/Src/w25_flash_memory.c:70:6:W25Q_FastRead	40	static
+../Core/Src/w25_flash_memory.c:87:6:W25Q_EraseSector	32	static
+../Core/Src/w25_flash_memory.c:118:6:W25Q_Write	328	static
+../Core/Src/w25_flash_memory.c:179:6:W25Q_WriteToBufferFlushOnSectorFull	24	static
+../Core/Src/w25_flash_memory.c:245:9:Read_Status_Register_1	16	static
+../Core/Src/w25_flash_memory.c:259:13:W25Q_EraseSector_NonBlocking	32	static
+../Core/Src/w25_flash_memory.c:283:13:W25Q_WritePage_NonBlocking	296	static
+../Core/Src/w25_flash_memory.c:305:13:CS_Low	8	static
+../Core/Src/w25_flash_memory.c:310:13:CS_High	8	static
+../Core/Src/w25_flash_memory.c:315:13:Write_Enable	16	static
+../Core/Src/w25_flash_memory.c:325:13:Write_Disable	16	static
+../Core/Src/w25_flash_memory.c:335:17:Bytes_to_Write	16	static
+../Core/Src/w25_flash_memory.c:347:13:Add_to_Buffer	24	static

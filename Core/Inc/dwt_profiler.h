@@ -79,6 +79,7 @@ typedef enum {
     PROF_PACKET_COMPOSE,
     PROF_UART2_SEND,
     PROF_LORA_SEND,
+	PROF_SD_LOGGER,
     PROF_MAIN_LOOP,
     // Add more profile IDs here as needed
     PROF_MAX_COUNT

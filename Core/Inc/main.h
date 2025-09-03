@@ -64,6 +64,10 @@ void trigger_sr_in_pulse(void);
 #define RF_M1_GPIO_Port GPIOC
 #define SD_CS_Pin GPIO_PIN_4
 #define SD_CS_GPIO_Port GPIOA
+#define BUZZER_Pin GPIO_PIN_14
+#define BUZZER_GPIO_Port GPIOB
+#define W25_FLASH_CS_Pin GPIO_PIN_15
+#define W25_FLASH_CS_GPIO_Port GPIOA
 
 /* USER CODE BEGIN Private defines */
 #define L86_TX_Pin GPIO_PIN_6

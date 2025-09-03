@@ -308,7 +308,7 @@ void bmi088_update(bmi088_struct_t* BMI)
 		BMI->datas.gyro_y = (((float)gyro_y_16 / 32767.0) * (float)(2000 >> BMI->device_config.gyro_range) - BMI->device_config.offsets->gyro_offset[1]) * DEG_TO_RAD;
 		BMI->datas.gyro_z = (((float)gyro_z_16 / 32767.0) * (float)(2000 >> BMI->device_config.gyro_range) - BMI->device_config.offsets->gyro_offset[2]) * DEG_TO_RAD;
 
-		Orientation_Update(BMI->datas.gyro_y, -BMI->datas.gyro_x, BMI->datas.gyro_z, BMI->datas.acc_y, -BMI->datas.acc_x, BMI->datas.acc_z, BMI->datas.delta_time);
+		Orientation_Update(BMI->datas.gyro_z, BMI->datas.gyro_y, -BMI->datas.gyro_x, BMI->datas.acc_z, BMI->datas.acc_y, -BMI->datas.acc_x, BMI->datas.delta_time);
 		BMI->datas.theta = quaternionToThetaZ();
 		is_gyro_renewed = 1;
 

@@ -1,5 +1,4 @@
-../Core/Src/data_logger.c:28:6:data_logger_init	312	static
-../Core/Src/data_logger.c:58:6:log_datas	440	static
-../Core/Src/data_logger.c:69:6:log_normal_packet_data	16	static
-../Core/Src/data_logger.c:82:6:flush_packet_buffer	16	static
-../Core/Src/data_logger.c:101:6:force_flush_buffer	8	static
+../Core/Src/data_logger.c:33:6:data_logger_init	8	static
+../Core/Src/data_logger.c:54:6:log_normal_packet_data	24	static
+../Core/Src/data_logger.c:97:6:flush_packet_buffer	16	static
+../Core/Src/data_logger.c:126:6:force_flush_buffer	8	static

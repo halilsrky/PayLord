@@ -20,10 +20,15 @@ typedef union {
     uint8_t array[4];
 } FLOAT32_UINT8_DONUSTURUCU;
 
+typedef union {
+    uint16_t sayi;
+    uint8_t array[2];
+} UINT16_UINT8_DONUSTURUCU;
 
 unsigned char check_sum_hesapla_normal(int a);
 
 
 void addDataPacketNormal(BME_280_t* BME, bmi088_struct_t* BMI, sensor_fusion_t* sensor, gps_data_t* GPS, float hmc1021_gauss, float voltage, float current);
+void addDataPacketSD(BME_280_t* BME, bmi088_struct_t* BMI, sensor_fusion_t* sensor, gps_data_t* GPS, float hmc1021_gauss, float voltage, float current);
 
 #endif /* INC_PACKET_H_ */
