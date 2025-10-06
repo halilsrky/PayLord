@@ -1,6 +1,5 @@
 # 🚀 PayLord - Payload Kartı Yazılımı
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![STM32](https://img.shields.io/badge/STM32-F446RE-green.svg)](https://www.st.com/en/microcontrollers-microprocessors/stm32f446re.html)
 [![TEKNOFEST](https://img.shields.io/badge/TEKNOFEST-2024--2025-red.svg)](https://www.teknofest.org/)
 
